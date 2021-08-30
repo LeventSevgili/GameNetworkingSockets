@@ -19,9 +19,11 @@ extern "C" {
 //
 // On failure, false is returned, and a non-localized diagnostic message is returned.
 STEAMNETWORKINGSOCKETS_INTERFACE bool GameNetworkingSockets_Init( const SteamNetworkingIdentity *pIdentity, SteamNetworkingErrMsg &errMsg );
+STEAMNETWORKINGSOCKETS_INTERFACE ISteamNetworkingSockets* GameNetworkingSockets_Create(const SteamNetworkingIdentity* pIdentity, SteamNetworkingErrMsg& errMsg);
 
 // Close all connections and listen sockets and free all resources
 STEAMNETWORKINGSOCKETS_INTERFACE void GameNetworkingSockets_Kill();
+STEAMNETWORKINGSOCKETS_INTERFACE void GameNetworkingSockets_Destroy(ISteamNetworkingSockets* pSteamNetworkingSockets);
 
 /// Custom memory allocation methods.  If you call this, you MUST call it exactly once,
 /// before calling any other API function.  *Most* allocations will pass through these,

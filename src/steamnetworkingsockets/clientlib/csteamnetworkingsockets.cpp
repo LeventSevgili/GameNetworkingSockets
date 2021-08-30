@@ -2325,6 +2325,22 @@ STEAMNETWORKINGSOCKETS_INTERFACE bool GameNetworkingSockets_Init( const SteamNet
 	return true;
 }
 
+STEAMNETWORKINGSOCKETS_INTERFACE ISteamNetworkingSockets* GameNetworkingSockets_Create(const SteamNetworkingIdentity* pIdentity, SteamNetworkingErrMsg& errMsg)
+{
+	SteamNetworkingGlobalLock lock("GameNetworkingSockets_Init");
+
+	// Init basic functionality
+	CSteamNetworkingSockets* pSteamNetworkingSockets = new CSteamNetworkingSockets((CSteamNetworkingUtils*)SteamNetworkingUtils());
+	if (!pSteamNetworkingSockets->BInitGameNetworkingSockets(pIdentity, errMsg))
+	{
+		pSteamNetworkingSockets->Destroy();
+		return nullptr;
+	}
+
+	return pSteamNetworkingSockets;
+}
+
+
 STEAMNETWORKINGSOCKETS_INTERFACE void GameNetworkingSockets_Kill()
 {
 	SteamNetworkingGlobalLock lock( "GameNetworkingSockets_Kill" );
@@ -2332,6 +2348,16 @@ STEAMNETWORKINGSOCKETS_INTERFACE void GameNetworkingSockets_Kill()
 	{
 		s_pSteamNetworkingSockets->Destroy();
 		s_pSteamNetworkingSockets = nullptr;
+	}
+}
+
+STEAMNETWORKINGSOCKETS_INTERFACE void GameNetworkingSockets_Destroy(ISteamNetworkingSockets* pSteamNetworkingSockets)
+{
+	SteamNetworkingGlobalLock lock("GameNetworkingSockets_Destroy");
+	if (pSteamNetworkingSockets)
+	{
+		((CSteamNetworkingSockets*)pSteamNetworkingSockets)->Destroy();
+		pSteamNetworkingSockets = nullptr;
 	}
 }
 

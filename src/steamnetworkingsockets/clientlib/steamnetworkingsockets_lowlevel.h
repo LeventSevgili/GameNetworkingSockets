@@ -22,11 +22,11 @@
 // Set STEAMNETWORKINGSOCKETS_LOCK_DEBUG_LEVEL.
 // NOTE: Currently only 0 or 1 is allowed.  Later we might add more flexibility
 #ifndef STEAMNETWORKINGSOCKETS_LOCK_DEBUG_LEVEL
-	#ifdef DBGFLAG_ASSERT
-		#define STEAMNETWORKINGSOCKETS_LOCK_DEBUG_LEVEL 1
-	#else
+	//#ifdef DBGFLAG_ASSERT
+	//	#define STEAMNETWORKINGSOCKETS_LOCK_DEBUG_LEVEL 1
+	//#else
 		#define STEAMNETWORKINGSOCKETS_LOCK_DEBUG_LEVEL 0
-	#endif
+	//#endif
 #endif
 
 struct iovec;
