@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\types\bad_optional_access.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\cycleclock.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\spinlock.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\sysinfo.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\thread_identity.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\unscaledcycleclock.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\dynamic_annotations.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\numeric\int128.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\log_severity.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\raw_logging.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\spinlock_wait.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\strings\internal\ostringstream.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\strings\internal\utf8.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\strings\internal\escaping.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\throw_delegate.cc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\types\bad_optional_access.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\call_once.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\casts.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\cycleclock.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\low_level_scheduling.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\per_thread_tls.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\spinlock.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\sysinfo.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\thread_identity.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\tsan_mutex_interface.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\unscaledcycleclock.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\dynamic_annotations.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\numeric\int128.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\log_severity.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\raw_logging.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\spinlock_wait.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\strings\internal\char_map.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\strings\internal\escaping.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\strings\internal\ostringstream.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\strings\internal\resize_uninitialized.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\strings\internal\utf8.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil\absl\base\internal\throw_delegate.h" />
+  </ItemGroup>
+</Project>

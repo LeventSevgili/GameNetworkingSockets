@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="GameNetworkingSocketsAndroid.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\crypto_textencode.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\keypair.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\steamid.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\clientlib\csteamnetworkingsockets.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\clientlib\csteamnetworkingmessages.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\clientlib\steamnetworkingsockets_flat.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\clientlib\steamnetworkingsockets_connections.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\clientlib\steamnetworkingsockets_lowlevel.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\clientlib\steamnetworkingsockets_p2p.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\clientlib\steamnetworkingsockets_p2p_ice.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\clientlib\steamnetworkingsockets_snp.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\clientlib\steamnetworkingsockets_udp.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\steamnetworkingsockets_certs.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\steamnetworkingsockets_certstore.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\steamnetworkingsockets_shared.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\steamnetworkingsockets_stats.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\steamnetworkingsockets\steamnetworkingsockets_thinker.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\tier0\dbg.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\tier0\platformtime.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\tier1\netadr.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\tier1\utlbuffer.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\tier1\utlmemory.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\tier1\ipv6text.c" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\vstdlib\strtools.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\crypto_openssl.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\opensslwrapper.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\crypto_25519_openssl.cpp" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\steamnetworkingsockets_messages_certs.pb.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\steamnetworkingsockets_messages.pb.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\steamnetworkingsockets_messages_udp.pb.cc" />
+    <ClCompile Include="..\..\..\src\common\crypto.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="GameNetworkingSocketsAndroid.h" />
+    <ClInclude Include="pch.h" />
+  </ItemGroup>
+</Project>

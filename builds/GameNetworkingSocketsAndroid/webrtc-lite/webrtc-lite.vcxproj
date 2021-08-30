@@ -1,0 +1,538 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|ARM">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM">
+      <Configuration>Release</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x86">
+      <Configuration>Debug</Configuration>
+      <Platform>x86</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x86">
+      <Configuration>Release</Configuration>
+      <Platform>x86</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{ae69a533-99f7-4cc4-a4e9-975c37aa594d}</ProjectGuid>
+    <Keyword>Android</Keyword>
+    <RootNamespace>webrtc_lite</RootNamespace>
+    <MinimumVisualStudioVersion>14.0</MinimumVisualStudioVersion>
+    <ApplicationType>Android</ApplicationType>
+    <ApplicationTypeRevision>3.0</ApplicationTypeRevision>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>Clang_5_0</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>Clang_5_0</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>Clang_5_0</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>Clang_5_0</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>Clang_5_0</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>Clang_5_0</PlatformToolset>
+    <UseOfStl>c++_static</UseOfStl>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>Clang_5_0</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>Clang_5_0</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <IncludePath>C:\android-ndk-r21d\sources\third_party\shaderc\libshaderc_util\include\libshaderc_util;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PreprocessorDefinitions>WEBRTC_POSIX;WEBRTC_ANDROID;ANDROID;GOOGLE_PROTOBUF_NO_RTTI;PROTOBUF_USE_DLLS;VALVE_CRYPTO_ENABLE_25519;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;NOMINMAX;__CLANG_SUPPORT_DYN_ANNOTATION__;CMAKE_INTDIR="Debug";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\steamwebrtc\..\webrtc;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\external\steamwebrtc\..;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\external\steamwebrtc;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil;C:\Users\loren\Desktop\Source\GameNetworkingSockets\vcpkg\installed\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CppLanguageStandard>c++14</CppLanguageStandard>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PreprocessorDefinitions>WEBRTC_POSIX;POSIX;WEBRTC_ANDROID;ANDROID;GOOGLE_PROTOBUF_NO_RTTI;PROTOBUF_USE_DLLS;VALVE_CRYPTO_ENABLE_25519;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;NOMINMAX;__CLANG_SUPPORT_DYN_ANNOTATION__;CMAKE_INTDIR="Debug";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\steamwebrtc\..\webrtc;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\external\steamwebrtc\..;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\external\steamwebrtc;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil;C:\Users\loren\Desktop\Source\gns\build\sdk\protobuf-armv8\include;C:\Users\loren\Desktop\Source\gns\build\sdk\OpenSSL-armv8\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CppLanguageStandard>gnu++14</CppLanguageStandard>
+      <AdditionalOptions> -D_GLIBCXX_USE_C99 %(AdditionalOptions)</AdditionalOptions>
+      <ExceptionHandling>Enabled</ExceptionHandling>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <LibraryDependencies>Abseil;abseil_strings;ssl;crypto;protobuf;%(LibraryDependencies)</LibraryDependencies>
+      <AdditionalOptions>-lm %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\src\external\steamwebrtc\ice_session.cpp" />
+    <ClCompile Include="..\..\..\src\external\webrtc\rtc_base\ifaddrs_android.cc" />
+    <ClCompile Include="..\..\..\src\external\webrtc\rtc_base\ifaddrs_converter.cc" />
+    <ClCompile Include="..\..\..\src\external\webrtc\rtc_base\synchronization\rw_lock_posix.cc" />
+    <ClCompile Include="..\..\..\src\external\webrtc\rtc_base\system\warn_current_thread_is_deadlocked.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\adaptation\resource.cc" />
+    <ClInclude Include="..\..\..\src\external\steamwebrtc\ice_session.h" />
+    <ClInclude Include="..\..\..\src\external\steamwebrtc\steamwebrtc_internal.h" />
+    <ClInclude Include="..\..\..\src\external\webrtc\rtc_base\ifaddrs_android.h" />
+    <ClInclude Include="..\..\..\src\external\webrtc\rtc_base\ifaddrs_converter.h" />
+    <ClInclude Include="..\..\..\src\external\webrtc\rtc_base\synchronization\rw_lock_posix.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\adaptation\resource.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\array_view.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\async_resolver_factory.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\candidate.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\candidate.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\crypto_params.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\crypto\crypto_options.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\crypto\crypto_options.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\crypto\frame_decryptor_interface.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\crypto\frame_encryptor_interface.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\dtls_transport_interface.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\dtls_transport_interface.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\dtmf_sender_interface.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\fec_controller_override.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\fec_controller.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\frame_transformer_interface.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\function_view.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\ice_transport_interface.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\neteq\neteq_factory.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\neteq\neteq.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\neteq\neteq.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\network_state_predictor.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\packet_socket_factory.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\priority.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\proxy.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\proxy.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\ref_counted_base.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\rtc_error.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\rtc_error.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\rtc_event_log\rtc_event.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\rtc_event_log\rtc_event.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\scoped_refptr.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\task_queue\default_task_queue_factory.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\task_queue\queued_task.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\task_queue\task_queue_base.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\task_queue\task_queue_base.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\task_queue\task_queue_factory.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\bitrate_settings.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\bitrate_settings.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\data_channel_transport_interface.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\enums.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\network_control.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\network_types.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\network_types.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\rtp\dependency_descriptor.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\rtp\dependency_descriptor.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\rtp\rtp_source.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\stun.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\stun.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\transport\webrtc_key_value_config.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\turn_customizer.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\units\data_rate.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\units\data_rate.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\units\data_size.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\units\data_size.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\units\frequency.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\units\frequency.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\units\time_delta.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\units\time_delta.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\units\timestamp.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\api\units\timestamp.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\common_types.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\logging\rtc_event_log\events\rtc_event_dtls_transport_state.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\logging\rtc_event_log\events\rtc_event_dtls_transport_state.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\logging\rtc_event_log\events\rtc_event_dtls_writable_state.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\logging\rtc_event_log\events\rtc_event_dtls_writable_state.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\logging\rtc_event_log\events\rtc_event_ice_candidate_pair_config.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\logging\rtc_event_log\events\rtc_event_ice_candidate_pair_config.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\logging\rtc_event_log\events\rtc_event_ice_candidate_pair.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\logging\rtc_event_log\events\rtc_event_ice_candidate_pair.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\logging\rtc_event_log\ice_logger.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\logging\rtc_event_log\ice_logger.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\modules\utility\include\process_thread.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\async_stun_tcp_socket.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\async_stun_tcp_socket.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\basic_ice_controller.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\basic_ice_controller.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\basic_packet_socket_factory.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\basic_packet_socket_factory.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\candidate_pair_interface.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\connection_info.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\connection_info.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\connection.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\connection.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\dtls_transport_internal.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\dtls_transport_internal.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\dtls_transport.cc">
+      <ObjectFileName>$(IntDir)/__/webrtc/p2p/base/dtls_transport.cc.obj</ObjectFileName>
+    </ClCompile>
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\dtls_transport.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\ice_controller_factory_interface.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\ice_controller_interface.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\ice_controller_interface.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\ice_credentials_iterator.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\ice_credentials_iterator.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\ice_transport_internal.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\ice_transport_internal.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\p2p_constants.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\p2p_constants.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\p2p_transport_channel_ice_field_trials.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\p2p_transport_channel.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\p2p_transport_channel.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\packet_transport_internal.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\packet_transport_internal.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\port_allocator.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\port_allocator.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\port_interface.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\port_interface.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\port.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\port.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\regathering_controller.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\regathering_controller.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\stun_port.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\stun_port.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\stun_request.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\stun_request.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\tcp_port.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\tcp_port.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\transport_description_factory.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\transport_description_factory.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\transport_description.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\transport_description.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\transport_info.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\turn_port.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\turn_port.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\base\udp_port.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\client\basic_port_allocator.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\client\basic_port_allocator.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\client\relay_port_factory_interface.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\client\turn_port_factory.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\p2p\client\turn_port_factory.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\channel_interface.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\channel_manager.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\channel_manager.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\channel.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\channel.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\dtls_transport.cc">
+      <ObjectFileName>$(IntDir)/__/webrtc/pc/dtls_transport.cc.obj</ObjectFileName>
+    </ClCompile>
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\dtls_transport.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\ice_transport.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\ice_transport.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\sdp_serializer.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\sdp_serializer.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\session_description.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\session_description.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\simulcast_description.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\simulcast_description.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\transport_stats.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\transport_stats.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\used_ids.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\steamwebrtc\webrtc_sdp.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\pc\webrtc_sdp.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\arraysize.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_invoker_inl.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_invoker.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_invoker.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_packet_socket.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_packet_socket.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_resolver_interface.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_resolver_interface.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_socket.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_socket.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_tcp_socket.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_tcp_socket.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_udp_socket.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\async_udp_socket.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\atomic_ops.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\bind.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\bit_buffer.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\buffer_queue.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\buffer_queue.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\buffer.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\byte_buffer.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\byte_buffer.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\byte_order.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\callback.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\checks.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\checks.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\constructor_magic.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\copy_on_write_buffer.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\copy_on_write_buffer.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\crc32.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\crc32.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\critical_section.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\critical_section.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\crypt_string.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\crypt_string.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\deprecated\signal_thread.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\deprecated\signal_thread.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\deprecation.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\dscp.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\event_tracer.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\event_tracer.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\event.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\event.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\experiments\field_trial_parser.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\experiments\field_trial_parser.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\experiments\field_trial_units.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\experiments\field_trial_units.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\experiments\struct_parameters_parser.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\experiments\struct_parameters_parser.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\helpers.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\helpers.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\http_common.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\http_common.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ip_address.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ip_address.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\location.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\location.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\logging.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\logging.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\mdns_responder_interface.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\message_digest.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\message_digest.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\message_handler.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\message_handler.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\net_helper.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\net_helper.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\net_helpers.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\net_helpers.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\network_constants.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\network_constants.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\network_monitor.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\network_monitor.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\network_route.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\network_route.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\network.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\network.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\network\sent_packet.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\network\sent_packet.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\null_socket_server.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\null_socket_server.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\numerics\event_based_exponential_moving_average.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\numerics\event_based_exponential_moving_average.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\numerics\safe_compare.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\numerics\safe_conversions_impl.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\numerics\safe_conversions.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\numerics\safe_minmax.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_adapter.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_adapter.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_certificate.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_certificate.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_digest.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_digest.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_identity.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_identity.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_session_cache.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_session_cache.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_stream_adapter.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_stream_adapter.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_utility.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl_utility.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\openssl.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\physical_socket_server.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\physical_socket_server.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\platform_thread_types.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\platform_thread_types.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\platform_thread.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\platform_thread.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\proxy_info.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\proxy_info.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\rate_tracker.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\rate_tracker.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ref_count.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ref_counted_object.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ref_counter.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\rtc_certificate.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\rtc_certificate.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\sanitizer.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\signal_thread.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\socket_adapters.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\socket_adapters.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\socket_address.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\socket_address.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\socket_factory.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\socket_server.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\socket.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\socket.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ssl_adapter.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ssl_adapter.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ssl_certificate.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ssl_certificate.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ssl_fingerprint.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ssl_fingerprint.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ssl_identity.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ssl_identity.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ssl_roots.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ssl_stream_adapter.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\ssl_stream_adapter.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\stream.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\stream.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\string_encode.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\string_encode.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\string_to_number.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\string_to_number.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\string_utils.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\string_utils.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\stringize_macros.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\strings\string_builder.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\strings\string_builder.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\synchronization\mutex_critical_section.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\synchronization\mutex.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\synchronization\mutex.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\synchronization\rw_lock_wrapper.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\synchronization\rw_lock_wrapper.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\synchronization\sequence_checker.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\synchronization\sequence_checker.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\synchronization\yield_policy.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\synchronization\yield_policy.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\synchronization\yield.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\synchronization\yield.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\system\arch.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\system\file_wrapper.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\system\file_wrapper.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\system\inline.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\system\rtc_export.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\system\unused.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\system\warn_current_thread_is_deadlocked.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\task_utils\pending_task_safety_flag.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\task_utils\pending_task_safety_flag.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\task_utils\to_queued_task.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\third_party\base64\base64.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\third_party\base64\base64.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\third_party\sigslot\sigslot.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\third_party\sigslot\sigslot.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\thread_annotations.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\thread_checker.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\thread_message.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\thread.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\thread.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\time_utils.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\time_utils.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\trace_event.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\type_traits.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\unique_id_generator.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\unique_id_generator.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\units\unit_base.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\weak_ptr.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\weak_ptr.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\zero_memory.cc" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\rtc_base\zero_memory.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\system_wrappers\include\clock.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\system_wrappers\include\field_trial.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\system_wrappers\include\metrics.h" />
+    <ClInclude Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\system_wrappers\include\ntp_time.h" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\system_wrappers\source\clock.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\system_wrappers\source\field_trial.cc" />
+    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\webrtc\system_wrappers\source\metrics.cc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>
