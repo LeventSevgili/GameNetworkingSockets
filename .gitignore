@@ -50,6 +50,12 @@ perf.data.old
 *partner*
 
 # We use cmake, so no Visual studio project files should be in git
-*.sln
-*.vcxproj
-*.vcxproj.filters
+#*.sln
+#*.vcxproj
+#*.vcxproj.filters
+
+# remove Android project files
+/builds/GameNetworkingSocketsAndroid/**/ipch/
+/builds/GameNetworkingSocketsAndroid/**/ARM64/
+**/Release
+**/Debug
