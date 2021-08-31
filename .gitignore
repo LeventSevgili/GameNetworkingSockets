@@ -38,8 +38,11 @@ perf.data.old
 
 *.VC.*
 /.vscode
-/build
-/build-*
+**/bin
+**/DataStore
+**/DerivedData
+#/build removed for Xcode
+#/build-* removed for Xcode
 /log.txt
 /src/.vs/*
 /src/steamnetworkingsockets/Messageswin64Debug/*
