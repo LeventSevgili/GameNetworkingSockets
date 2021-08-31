@@ -147,11 +147,11 @@
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\..\include;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\public;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil;C:\Users\loren\Desktop\Source\gns\build\sdk\protobuf-armv8\include;C:\Users\loren\Desktop\Source\gns\build\sdk\OpenSSL-armv8\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\..\include;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\public;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil;C:\Users\loren\Desktop\Source\gns\build\sdk\protobuf-armv8\include;C:\Users\loren\Desktop\Source\gns\build\sdk\OpenSSL-armv8\include;C:\sdk\protobuf-amd64\include;C:\Program Files\OpenSSL-Win64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WEBRTC_POSIX;POSIX;WEBRTC_ANDROID;ANDROID;NDEBUG;GOOGLE_PROTOBUF_NO_RTTI;PROTOBUF_USE_DLLS;STEAMNETWORKINGSOCKETS_ENABLE_ICE;STEAMWEBRTC_USE_STATIC_LIBS;STEAMNETWORKINGSOCKETS_FOREXPORT;ENABLE_OPENSSLCONNECTION;CRYPTO_DISABLE_ENCRYPT_WITH_PASSWORD;STEAMNETWORKINGSOCKETS_CRYPTO_VALVEOPENSSL;STEAMNETWORKINGSOCKETS_CRYPTO_25519_OPENSSL;VALVE_CRYPTO_ENABLE_25519;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;__CLANG_SUPPORT_DYN_ANNOTATION__;CMAKE_INTDIR="Release";GameNetworkingSockets_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <CppLanguageStandard>c++11</CppLanguageStandard>
       <ExceptionHandling>Enabled</ExceptionHandling>
-      <DebugInformationFormat>FullDebug</DebugInformationFormat>
+      <DebugInformationFormat>None</DebugInformationFormat>
     </ClCompile>
     <Link>
       <LibraryDependencies>webrtc_lite;Abseil;abseil_strings;ssl;crypto;protobuf;%(LibraryDependencies)</LibraryDependencies>

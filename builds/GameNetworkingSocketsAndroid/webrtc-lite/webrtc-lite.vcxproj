@@ -144,7 +144,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <PreprocessorDefinitions>WEBRTC_POSIX;POSIX;WEBRTC_ANDROID;ANDROID;GOOGLE_PROTOBUF_NO_RTTI;PROTOBUF_USE_DLLS;VALVE_CRYPTO_ENABLE_25519;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;NOMINMAX;__CLANG_SUPPORT_DYN_ANNOTATION__;CMAKE_INTDIR="Debug";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\steamwebrtc\..\webrtc;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\external\steamwebrtc\..;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\external\steamwebrtc;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil;C:\Users\loren\Desktop\Source\gns\build\sdk\protobuf-armv8\include;C:\Users\loren\Desktop\Source\gns\build\sdk\OpenSSL-armv8\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\steamwebrtc\..\webrtc;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\external\steamwebrtc\..;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\external\steamwebrtc;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil;C:\Users\loren\Desktop\Source\gns\build\sdk\protobuf-armv8\include;C:\Users\loren\Desktop\Source\gns\build\sdk\OpenSSL-armv8\include;C:\Program Files\OpenSSL-Win64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>gnu++14</CppLanguageStandard>
       <AdditionalOptions> -D_GLIBCXX_USE_C99 %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Enabled</ExceptionHandling>
