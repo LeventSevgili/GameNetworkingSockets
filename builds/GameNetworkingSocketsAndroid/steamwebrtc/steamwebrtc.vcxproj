@@ -82,6 +82,7 @@
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>Clang_5_0</PlatformToolset>
+    <AndroidAPILevel>android-21</AndroidAPILevel>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings" />
@@ -158,6 +159,10 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PreprocessorDefinitions>WEBRTC_POSIX;POSIX;ANDROID;NDEBUG;GOOGLE_PROTOBUF_NO_RTTI;PROTOBUF_USE_DLLS;VALVE_CRYPTO_ENABLE_25519;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;WEBRTC_ANDROID;NOMINMAX;WIN32_LEAN_AND_MEAN;__CLANG_SUPPORT_DYN_ANNOTATION__;CMAKE_INTDIR="Release";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\steamwebrtc\..\webrtc\include\webrtc;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\steamwebrtc\..\webrtc;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil;C:\Users\loren\Desktop\Source\GameNetworkingSockets\vcpkg\installed\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>Enabled</ExceptionHandling>
+      <CppLanguageStandard>c++14</CppLanguageStandard>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
