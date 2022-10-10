@@ -8,7 +8,9 @@
 //#include <tier1/passwordhash.h>
 #include "keypair.h"
 
+BEGIN_TIER1_NAMESPACE
 class CUtlBuffer;
+END_TIER1_NAMESPACE
 
 // Base class for symmetric encryption and decryption context.
 // A context is used when you want to use the same encryption
@@ -30,7 +32,36 @@ protected:
 	uint32 m_cbIV, m_cbTag;
 };
 
-// Base class for AES-GCM encryption and ddecryption
+/// Abstract interface for symmetric encryption.
+struct ISymmetricEncryptContext
+{
+	virtual ~ISymmetricEncryptContext() {}
+
+	// Encrypt data and append auth tag
+	virtual bool Encrypt(
+		const void *pPlaintextData, size_t cbPlaintextData,
+		const void *pIV,
+		void *pEncryptedDataAndTag, uint32 *pcbEncryptedDataAndTag,
+		const void *pAdditionalAuthenticationData, size_t cbAuthenticationData // Optional additional authentication data.  Not encrypted, but will be included in the tag, so it can be authenticated.
+	) = 0;
+};
+
+/// Abstract interface for symmetric decryption
+struct ISymmetricDecryptContext
+{
+	virtual ~ISymmetricDecryptContext() {}
+
+	// Decrypt data and check auth tag, which is assumed to be at the end
+	virtual bool Decrypt(
+		const void *pEncryptedDataAndTag, size_t cbEncryptedDataAndTag,
+		const void *pIV,
+		void *pPlaintextData, uint32 *pcbPlaintextData,
+		const void *pAdditionalAuthenticationData, size_t cbAuthenticationData // Optional additional authentication data.  Not encrypted, but will be included in the tag, so it can be authenticated.
+	) = 0;
+};
+
+
+/// Base class for AES-GCM encryption and decryption
 class AES_GCM_CipherContext : public SymmetricCryptContextBase
 {
 public:
@@ -39,7 +70,8 @@ public:
 	bool InitCipher( const void *pKey, size_t cbKey, size_t cbIV, size_t cbTag, bool bEncrypt );
 };
 
-class AES_GCM_EncryptContext : public AES_GCM_CipherContext
+/// Encryption context for AES-GCM
+class AES_GCM_EncryptContext final : public AES_GCM_CipherContext, public ISymmetricEncryptContext
 {
 public:
 
@@ -49,16 +81,17 @@ public:
 		return InitCipher( pKey, cbKey, cbIV, cbTag, true );
 	}
 
-	// Encrypt data and append auth tag
-	bool Encrypt(
+	// Implements ISymmetricEncryptContext
+	virtual bool Encrypt(
 		const void *pPlaintextData, size_t cbPlaintextData,
 		const void *pIV,
 		void *pEncryptedDataAndTag, uint32 *pcbEncryptedDataAndTag,
 		const void *pAdditionalAuthenticationData, size_t cbAuthenticationData // Optional additional authentication data.  Not encrypted, but will be included in the tag, so it can be authenticated.
-	);
+	) override;
 };
 
-class AES_GCM_DecryptContext : public AES_GCM_CipherContext
+/// Decryption context for AES-GCM
+class AES_GCM_DecryptContext final : public AES_GCM_CipherContext, public ISymmetricDecryptContext
 {
 public:
 
@@ -68,13 +101,13 @@ public:
 		return InitCipher( pKey, cbKey, cbIV, cbTag, false );
 	}
 
-	// Decrypt data and check auth tag, which is assumed to be at the end
-	bool Decrypt(
+	// Implements ISymmetricDecryptContext
+	virtual bool Decrypt(
 		const void *pEncryptedDataAndTag, size_t cbEncryptedDataAndTag,
 		const void *pIV,
 		void *pPlaintextData, uint32 *pcbPlaintextData,
 		const void *pAdditionalAuthenticationData, size_t cbAuthenticationData // Optional additional authentication data.  Not encrypted, but will be included in the tag, so it can be authenticated.
-	);
+	) override;
 };
 
 namespace CCrypto
@@ -138,6 +171,9 @@ namespace CCrypto
 
 	// GenerateHMAC256 is our implementation of HMAC-SHA256. Relatively future-proof. You should probably use this unless you have a very good reason not to.
 	void GenerateHMAC256( const uint8 *pubData, uint32 cubData, const uint8 *pubKey, uint32 cubKey, SHA256Digest_t *pOutputDigest );
+	
+	// GenerateHMAC is our implementation of HMAC-SHA1. The current standard, although people are moving to HMAC-SHA256.
+	void GenerateHMAC( const uint8 *pubData, uint32 cubData, const uint8 *pubKey, uint32 cubKey, SHADigest_t *pOutputDigest );
 
 	/// Used for fast hashes that are reasonably secure
 	typedef uint64_t SipHashKey_t[2];

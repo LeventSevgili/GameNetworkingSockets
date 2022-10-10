@@ -1,27 +1,10 @@
 //====== Copyright Valve Corporation, All rights reserved. ====================
-
-#if defined( _MSC_VER ) && ( _MSC_VER <= 1800 )
-	#pragma warning( disable: 4244 )
-	// 1>C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\include\chrono(749): warning C4244: '=' : conversion from '__int64' to 'time_t', possible loss of data (steamnetworkingsockets_lowlevel.cpp)
-#endif
-
-#ifdef __GNUC__
-	// src/public/tier0/basetypes.h:104:30: error: assuming signed overflow does not occur when assuming that (X + c) < X is always false [-Werror=strict-overflow]
-	// current steamrt:scout gcc "g++ (SteamRT 4.8.4-1ubuntu15~12.04+steamrt1.2+srt1) 4.8.4" requires this at the top due to optimizations
-	#pragma GCC diagnostic ignored "-Wstrict-overflow"
-#endif
-
 #include <thread>
 #include <mutex>
 #include <atomic>
 
-#ifdef POSIX
-#include <pthread.h>
-#include <sched.h>
-#endif
-
 #include "steamnetworkingsockets_lowlevel.h"
-#include "../steamnetworkingsockets_platform.h"
+#include <tier0/platform_sockets.h>
 #include "../steamnetworkingsockets_internal.h"
 #include "../steamnetworkingsockets_thinker.h"
 #include "steamnetworkingsockets_connections.h"
@@ -29,6 +12,18 @@
 #include <tier1/utlpriorityqueue.h>
 #include <tier1/utllinkedlist.h>
 #include "crypto.h"
+
+#if IsPosix()
+	#include <pthread.h>
+	#include <sched.h>
+	#include <sys/types.h>
+	#if !IsNintendoSwitch()
+		#include <sys/socket.h>
+	#endif
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_RESOLVEHOSTNAME
+		#include <netdb.h>
+	#endif
+#endif
 
 #include <tier0/memdbgoff.h>
 
@@ -56,9 +51,8 @@ constexpr int k_msMaxPollWait = 1000;
 constexpr SteamNetworkingMicroseconds k_usecMaxTimestampDelta = k_msMaxPollWait * 1100;
 
 static void FlushSystemSpew();
-static void FlushSystemSpewLocked();
 
-int g_nSteamDatagramSocketBufferSize = 256*1024;
+int g_cbUDPSocketBufferSize = 256*1024;
 
 /// Global lock for all local data structures
 static Lock<RecursiveTimedMutexImpl> s_mutexGlobalLock( "global", 0 );
@@ -550,41 +544,42 @@ void CTaskList::RunTasks()
 			if ( pTask->m_pTarget )
 				scopeLock.Lock( s_lockTaskQueue );
 
-			// Do we have a lock we need to take?
-			if ( pTask->m_lockFunc )
-			{
-
-				int msTimeOut = 10;
-				if ( pTask->m_pTarget )
-				{
-					scopeLock.Lock( s_lockTaskQueue );
-
-					// Deleted while we locked?
-					if ( pTask->m_eTaskState != CQueuedTask::k_ETaskState_Queued )
-					{
-						Assert( pTask->m_eTaskState == CQueuedTask::k_ETaskState_ReadyToDelete );
-						Assert( pTask->m_pTarget == nullptr );
-						break;
-					}
-
-					// Use a short timeout and loop, in case we might deadlock
-					msTimeOut = 1;
-				}
-
-				if ( !(*pTask->m_lockFunc)( pTask->m_lockFuncArg, msTimeOut, pTask->m_pszTag ) )
-				{
-					// Other object is busy, or perhaps we are deadlocked?
-					continue;
-				}
-
-				// Deleted while we locked?
-				if ( pTask->m_eTaskState != CQueuedTask::k_ETaskState_Queued )
-				{
-					Assert( pTask->m_eTaskState == CQueuedTask::k_ETaskState_ReadyToDelete );
-					Assert( pTask->m_pTarget == nullptr );
-					break;
-				}
-			}
+// FIXME - has not been tested, and also does not have a good mechanism for unlocking.
+//			// Do we have a lock we need to take?
+//			if ( pTask->m_lockFunc )
+//			{
+//
+//				int msTimeOut = 10;
+//				if ( pTask->m_pTarget )
+//				{
+//					scopeLock.Lock( s_lockTaskQueue );
+//
+//					// Deleted while we locked?
+//					if ( pTask->m_eTaskState != CQueuedTask::k_ETaskState_Queued )
+//					{
+//						Assert( pTask->m_eTaskState == CQueuedTask::k_ETaskState_ReadyToDelete );
+//						Assert( pTask->m_pTarget == nullptr );
+//						break;
+//					}
+//
+//					// Use a short timeout and loop, in case we might deadlock
+//					msTimeOut = 1;
+//				}
+//
+//				if ( !(*pTask->m_lockFunc)( pTask->m_lockFuncArg, msTimeOut, pTask->m_pszTag ) )
+//				{
+//					// Other object is busy, or perhaps we are deadlocked?
+//					continue;
+//				}
+//
+//				// Deleted while we locked?
+//				if ( pTask->m_eTaskState != CQueuedTask::k_ETaskState_Queued )
+//				{
+//					Assert( pTask->m_eTaskState == CQueuedTask::k_ETaskState_ReadyToDelete );
+//					Assert( pTask->m_pTarget == nullptr );
+//					break;
+//				}
+//			}
 
 			// OK, we've got the locks we need and are ready to run.
 			// Unlink from the target, if we have one
@@ -703,7 +698,7 @@ void CQueuedTask::QueueToRunWithGlobalLock( const char *pszTag )
 	g_taskListRunWithGlobalLock.QueueTask( this );
 
 	// Make sure service thread will wake up to do something with this
-	WakeSteamDatagramThread();
+	WakeServiceThread();
 
 	// NOTE: At this point we are subject to being run or deleted at any time!
 }
@@ -713,7 +708,7 @@ void CQueuedTask::QueueToRunInBackground()
 	g_taskListRunInBackground.QueueTask( this );
 
 	//if ( s_bManualPollMode || ( s_pThreadSteamDatagram && s_pThreadSteamDatagram->get_id() != std::this_thread::get_id() ) )
-	WakeSteamDatagramThread();
+	WakeServiceThread();
 }
 
 // Try to guess if the route the specified address is probably "local".
@@ -885,6 +880,33 @@ static void UpdateFakeRateLimitTokenBuckets( SteamNetworkingMicroseconds usecNow
 inline IRawUDPSocket::IRawUDPSocket() {}
 inline IRawUDPSocket::~IRawUDPSocket() {}
 
+
+// Perform gather-based send, on platform that doesn't have sendmsg
+#ifdef PLATFORM_NO_SENDMSG
+bool sendto_gather( int sockfd, int nChunks, const iovec *pChunks, sockaddr *pAddr, socklen_t addrSize )
+{
+	COMPILE_TIME_ASSERT( k_cbSteamNetworkingSocketsMaxUDPMsgLen < 1500 );
+	char pkt[ 2048 ];
+	char *max = pkt + sizeof(pkt);
+	char *d = pkt;
+	for ( int i = 0 ; i < nChunks ; ++i )
+	{
+		const iovec &chunk = pChunks[i];
+		if ( d + chunk.iov_len > max )
+		{
+			AssertMsg( false, "Gather send too big!" );
+			return false;
+		}
+		memcpy( d, chunk.iov_base, chunk.iov_len );
+		d += chunk.iov_len;
+	}
+
+	ssize_t cbTotal = d - pkt;
+	ssize_t r = sendto( sockfd, pkt, cbTotal, 0, pAddr, addrSize );
+	return ( r == cbTotal );
+}
+#endif
+
 class CRawUDPSocketImpl final : public IRawUDPSocket
 {
 public:
@@ -914,6 +936,7 @@ public:
 	inline bool BReallySendRawPacket( int nChunks, const iovec *pChunks, const netadr_t &adrTo ) const
 	{
 		Assert( m_socket != INVALID_SOCKET );
+		Assert( nChunks > 0 );
 
 		// Add a tag.  If we end up holding the lock for a long time, this tag
 		// will tell us how many packets were sent
@@ -924,8 +947,13 @@ public:
 		socklen_t addrSize;
 		if ( m_nAddressFamilies & k_nAddressFamily_IPv6 )
 		{
-			addrSize = sizeof(sockaddr_in6);
-			adrTo.ToSockadrIPV6( &destAddress );
+			#ifdef PLATFORM_NO_IPV6
+				Assert( false );
+				return false;
+			#else
+				addrSize = sizeof(sockaddr_in6);
+				adrTo.ToSockadrIPV6( &destAddress );
+			#endif
 		}
 		else
 		{
@@ -950,7 +978,7 @@ public:
 			SteamNetworkingMicroseconds usecSendStart = SteamNetworkingSockets_GetLocalTimestamp();
 		#endif
 
-		#ifdef WIN32
+		#ifdef _WIN32
 			// Confirm that iovec and WSABUF are indeed bitwise equivalent
 			COMPILE_TIME_ASSERT( sizeof( iovec ) == sizeof( WSABUF ) );
 			COMPILE_TIME_ASSERT( offsetof( iovec, iov_len ) == offsetof( WSABUF, len ) );
@@ -969,18 +997,50 @@ public:
 				nullptr // lpCompletionRoutine
 			);
 			bool bResult = ( r == 0 );
+			#if !IsXbox()
+				if ( !bResult )
+				{
+					const char *lpMsgBuf = nullptr;
+					FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 
+								NULL, GetLastSocketError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), 
+								// Default language
+								(LPTSTR) & lpMsgBuf, 0, NULL);
+					if ( lpMsgBuf == nullptr )
+					{
+						SpewWarning( "WSASendTo %s failed, returned %d, last error=0x%x\n", CUtlNetAdrRender( adrTo ).String(), r, GetLastSocketError() );
+					}
+					else
+					{
+						SpewWarning( "WSASendTo %s failed, returned %d, last error=0x%x %s", CUtlNetAdrRender( adrTo ).String(), r, GetLastSocketError(), lpMsgBuf );
+						LocalFree( (LPVOID)lpMsgBuf );
+					}
+				}
+			#endif
 		#else
-			msghdr msg;
-			msg.msg_name = (sockaddr *)&destAddress;
-			msg.msg_namelen = addrSize;
-			msg.msg_iov = const_cast<struct iovec *>( pChunks );
-			msg.msg_iovlen = nChunks;
-			msg.msg_control = nullptr;
-			msg.msg_controllen = 0;
-			msg.msg_flags = 0;
+			bool bResult;
+			if ( nChunks == 1 )
+			{
+				ssize_t r = sendto( m_socket, pChunks->iov_base, pChunks->iov_len, 0, (sockaddr *)&destAddress, addrSize );
+				bResult = ( r == (ssize_t)pChunks->iov_len );
+			}
+			else
+			{
+				#ifdef PLATFORM_NO_SENDMSG
+					bResult = sendto_gather( m_socket, nChunks, pChunks, (sockaddr *)&destAddress, addrSize );
+				#else
+					msghdr msg;
+					msg.msg_name = (sockaddr *)&destAddress;
+					msg.msg_namelen = addrSize;
+					msg.msg_iov = const_cast<struct iovec *>( pChunks );
+					msg.msg_iovlen = nChunks;
+					msg.msg_control = nullptr;
+					msg.msg_controllen = 0;
+					msg.msg_flags = 0;
 
-			int r = ::sendmsg( m_socket, &msg, 0 );
-			bool bResult = ( r >= 0 ); // just check for -1 for error, since we don't want to take the time here to scan the iovec and sum up the expected total number of bytes sent
+					ssize_t r = sendmsg( m_socket, &msg, 0 );
+					bResult = ( r >= 0 ); // just check for -1 for error, since we don't want to take the time here to scan the iovec and sum up the expected total number of bytes sent
+				#endif
+			}
 		#endif
 
 		#ifdef STEAMNETWORKINGSOCKETS_LOWLEVEL_TIME_SOCKET_CALLS
@@ -1051,6 +1111,11 @@ public:
 		}
 	}
 
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DUALWIFI
+	CRawUDPSocketImpl *m_pDualWifiPartner = nullptr;
+	virtual IRawUDPSocket *GetDualWifiSecondarySocket( int nEnableSetting ) override;
+	#endif
+
 private:
 
 	void InternalAddToCleanupQueue();
@@ -1062,12 +1127,6 @@ static CUtlVector<CRawUDPSocketImpl *> s_vecRawSockets;
 
 /// Are any sockets pending destruction?
 static bool s_bRawSocketPendingDestruction;
-
-/// POSIX polling.  This list will be recreated any time a socket is created or destroyed
-#ifndef _WIN32
-static CUtlVector<pollfd> s_vecPollFDs;
-static bool s_bRecreatePollList = true;
-#endif
 
 /// Track packets that have fake lag applied and are pending to be sent/received
 class CPacketLagger : private IThinker
@@ -1250,31 +1309,62 @@ static CPacketLaggerSend s_packetLagQueueSend;
 static CPacketLaggerRecv s_packetLagQueueRecv;
 
 /// Object used to wake our background thread efficiently
-#if defined( _WIN32 )
-	static HANDLE s_hEventWakeThread = INVALID_HANDLE_VALUE;
-#elif defined( NN_NINTENDO_SDK )
-	static int s_hEventWakeThread = INVALID_SOCKET;
-#else
+#if defined( WAKE_THREAD_USING_EVENT )
+	static ThreadWakeEvent s_hEventWakeThread = INVALID_THREAD_WAKE_EVENT;
+#elif defined( WAKE_THREAD_USING_SOCKET_PAIR )
 	static SOCKET s_hSockWakeThreadRead = INVALID_SOCKET;
 	static SOCKET s_hSockWakeThreadWrite = INVALID_SOCKET;
 #endif
 
-static std::thread *s_pThreadSteamDatagram = nullptr;
+// POSIX polling using poll().  (Or something that has extremely similar semantics that we can
+// make work with a bit of compatibility glue.)  This list will be recreated any time a socket
+// is created or destroyed
+#ifdef USE_POLL
+static CUtlVector<pollfd> s_vecPollFDs;
+static bool s_bRecreatePollList = true;
 
-void WakeSteamDatagramThread()
+#ifndef POLLEVENT_INVALID
+	#define POLLEVENT_INVALID (-1)
+#endif
+
+#endif
+
+#ifdef USE_EPOLL
+static EPollHandle s_epollfd = INVALID_EPOLL_HANDLE;
+
+static bool AddFDToEPoll( int fd, CRawUDPSocketImpl *pSock, SteamNetworkingErrMsg &errMsg )
 {
-	#if defined( _WIN32 )
-		if ( s_hEventWakeThread != INVALID_HANDLE_VALUE )
-			SetEvent( s_hEventWakeThread );
-	#elif defined( NN_NINTENDO_SDK )
-		// Sorry, but this code is covered under NDA with Nintendo, and
-		// we don't have permission to distribute it.
-	#else
+	struct epoll_event ev = {};
+
+	ev.events = EPOLLIN; // We only care about sockets with data ready read
+	ev.data.ptr = pSock; // epoll can give us back some userdata.
+
+	if ( epoll_ctl( s_epollfd, EPOLL_CTL_ADD, fd, &ev) != 0 )
+	{
+		V_sprintf_safe( errMsg, "epoll_ctl failed, error 0x%x", GetLastSocketError() );
+		return false;
+	}
+	return true;
+}
+#endif
+
+static std::thread *s_pServiceThread = nullptr;
+
+void WakeServiceThread()
+{
+	#if defined( WAKE_THREAD_USING_EVENT )
+		if ( s_hEventWakeThread != INVALID_THREAD_WAKE_EVENT )
+			SetWakeThreadEvent( s_hEventWakeThread );
+	#elif defined( WAKE_THREAD_USING_SOCKET_PAIR )
 		if ( s_hSockWakeThreadWrite != INVALID_SOCKET )
 		{
 			char buf[1] = {0};
 			send( s_hSockWakeThreadWrite, buf, 1, 0 );
 		}
+	#elif defined( USE_EPOLL_ABORT )
+		EPollAbort( s_epollfd );
+	#else
+		#error "How do we wake the thread?"
 	#endif
 }
 
@@ -1359,6 +1449,14 @@ void CRawUDPSocketImpl::InternalAddToCleanupQueue()
 	// Clean up lagged packets, if any
 	s_packetLagQueueSend.AboutToDestroySocket( this );
 	s_packetLagQueueRecv.AboutToDestroySocket( this );
+
+	// We can immediately remove from the epoll, even if some other
+	// thread is polling on it.
+	#ifdef USE_EPOLL
+		int r = epoll_ctl( s_epollfd, EPOLL_CTL_DEL, m_socket, nullptr );
+		(void)r;
+		AssertMsg( r == 0, "epoll_ctl failed with errno=%d", errno );
+	#endif
 }
 
 void CRawUDPSocketImpl::Close()
@@ -1368,11 +1466,36 @@ void CRawUDPSocketImpl::Close()
 	// Mark the callback as detached, and put us in the queue for cleanup when it's safe.
 	InternalAddToCleanupQueue();
 
-	// Make sure we don't delay doing this too long
-	if ( s_bManualPollMode || ( s_pThreadSteamDatagram && s_pThreadSteamDatagram->get_id() != std::this_thread::get_id() ) )
+	// Check for Dual Wifi
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DUALWIFI
+		if ( m_pDualWifiPartner )
+		{
+			Assert( m_pDualWifiPartner->m_pDualWifiPartner == this );
+
+			if ( m_eDualWifiStatus == k_EDualWifi_Primary )
+			{
+				Assert( m_pDualWifiPartner->m_eDualWifiStatus == k_EDualWifi_Secondary );
+				m_pDualWifiPartner->InternalAddToCleanupQueue();
+			}
+			else
+			{
+				// People shouldn't do this, but if they do, let's not crash
+				AssertMsg( false, "Closed secondary dual Wifi socket directly?" );
+			}
+
+			m_pDualWifiPartner->m_eDualWifiStatus = k_EDualWifi_Done;
+			m_pDualWifiPartner->m_pDualWifiPartner = nullptr;
+
+			m_eDualWifiStatus = k_EDualWifi_Done;
+			m_pDualWifiPartner = nullptr;
+		}
+	#endif
+
+	// Don't try to clean it up right now if we might be in the middle of polling.
+	if ( s_bManualPollMode || s_pServiceThread )
 	{
-		// Another thread might be polling right now
-		WakeSteamDatagramThread();
+		// Make sure we don't delay doing this too long
+		WakeServiceThread();
 	}
 	else
 	{
@@ -1381,19 +1504,19 @@ void CRawUDPSocketImpl::Close()
 	}
 }
 
-static SOCKET OpenUDPSocketBoundToSockAddr( const void *sockaddr, size_t len, SteamDatagramErrMsg &errMsg, int *pnIPv6AddressFamilies )
+static SOCKET OpenUDPSocketBoundToSockAddr( const void *pSockaddr, size_t len, SteamNetworkingErrMsg &errMsg, int *pnIPv6AddressFamilies, int nBindInterface = -1 )
 {
 	unsigned int opt;
 
-	const sockaddr_in *inaddr = (const sockaddr_in *)sockaddr;
+	const sockaddr_in *inaddr = (const sockaddr_in *)pSockaddr;
 
 	// Select socket type.  For linux, use the "close on exec" flag, so that the
 	// socket will not be inherited by any child process that we spawn.
 	int sockType = SOCK_DGRAM;
-	#ifdef LINUX
+	#if IsLinux()
 		sockType |= SOCK_CLOEXEC;
 	#endif
-	#if defined( NN_NINTENDO_SDK ) && !defined( _WIN32 )
+	#if IsNintendoSwitch() && !defined( _WIN32 )
 		sockType |= SOCK_NONBLOCK;
 	#endif
 
@@ -1406,9 +1529,8 @@ static SOCKET OpenUDPSocketBoundToSockAddr( const void *sockaddr, size_t len, St
 	}
 
 	// We always use nonblocking IO
-	#if !defined( NN_NINTENDO_SDK ) || defined( _WIN32 )
-		opt = 1;
-		if ( ioctlsocket( sock, FIONBIO, (unsigned long*)&opt ) == -1 )
+	#if !IsNintendoSwitch() || defined( _WIN32 )
+		if ( !SetSocketNonBlocking( sock ) )
 		{
 			V_sprintf_safe( errMsg, "Failed to set socket nonblocking mode.  Error code 0x%08x.", GetLastSocketError() );
 			closesocket( sock );
@@ -1417,14 +1539,14 @@ static SOCKET OpenUDPSocketBoundToSockAddr( const void *sockaddr, size_t len, St
 	#endif
 
 	// Set buffer sizes
-	opt = g_nSteamDatagramSocketBufferSize;
+	opt = g_cbUDPSocketBufferSize;
 	if ( setsockopt( sock, SOL_SOCKET, SO_SNDBUF, (char *)&opt, sizeof(opt) ) )
 	{
 		V_sprintf_safe( errMsg, "Failed to set socket send buffer size.  Error code 0x%08x.", GetLastSocketError() );
 		closesocket( sock );
 		return INVALID_SOCKET;
 	}
-	opt = g_nSteamDatagramSocketBufferSize;
+	opt = g_cbUDPSocketBufferSize;
 	if ( setsockopt( sock, SOL_SOCKET, SO_RCVBUF, (char *)&opt, sizeof(opt) ) == -1 )
 	{
 		V_sprintf_safe( errMsg, "Failed to set socket recv buffer size.  Error code 0x%08x.", GetLastSocketError() );
@@ -1435,40 +1557,86 @@ static SOCKET OpenUDPSocketBoundToSockAddr( const void *sockaddr, size_t len, St
 	// Handle IP v6 dual stack?
 	if ( pnIPv6AddressFamilies )
 	{
+		#ifdef PLATFORM_NO_IPV6
+			Assert( false ); // Caller should check this define
+			V_strcpy_safe( errMsg, "No IPV6 support" );
+			closesocket( sock );
+			return INVALID_SOCKET;
+		#else
 
-		// Enable dual stack?
-		opt = ( *pnIPv6AddressFamilies == k_nAddressFamily_IPv6 ) ? 1 : 0;
-		if ( setsockopt( sock, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&opt, sizeof( opt ) ) != 0 )
-		{
-			if ( *pnIPv6AddressFamilies == k_nAddressFamily_IPv6 )
+			// Enable dual stack?
+			opt = ( *pnIPv6AddressFamilies == k_nAddressFamily_IPv6 ) ? 1 : 0;
+			if ( setsockopt( sock, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&opt, sizeof( opt ) ) != 0 )
 			{
-				// Spew a warning, but continue
-				SpewWarning( "Failed to set socket for IPv6 only (IPV6_V6ONLY=1).  Error code 0x%08X.  Continuing anyway.\n", GetLastSocketError() );
+				if ( *pnIPv6AddressFamilies == k_nAddressFamily_IPv6 )
+				{
+					// Spew a warning, but continue
+					SpewWarning( "Failed to set socket for IPv6 only (IPV6_V6ONLY=1).  Error code 0x%08X.  Continuing anyway.\n", GetLastSocketError() );
+				}
+				else
+				{
+					// Dual stack required, or only requested?
+					if ( *pnIPv6AddressFamilies == k_nAddressFamily_DualStack )
+					{
+						V_sprintf_safe( errMsg, "Failed to set socket for dual stack (IPV6_V6ONLY=0).  Error code 0x%08X.", GetLastSocketError() );
+						closesocket( sock );
+						return INVALID_SOCKET;
+					}
+
+					// Let caller know we're IPv6 only, and spew about this.
+					SpewWarning( "Failed to set socket for dual stack (IPV6_V6ONLY=0).  Error code 0x%08X.  Continuing using IPv6 only!\n", GetLastSocketError() );
+					*pnIPv6AddressFamilies = k_nAddressFamily_IPv6;
+				}
 			}
 			else
 			{
-				// Dual stack required, or only requested?
-				if ( *pnIPv6AddressFamilies == k_nAddressFamily_DualStack )
+				// Tell caller what they've got
+				*pnIPv6AddressFamilies = opt ? k_nAddressFamily_IPv6 : k_nAddressFamily_DualStack;
+			}
+		#endif
+	}
+
+	// Bind to particular interface
+	if ( nBindInterface >= 0 )
+	{
+		#ifdef _WIN32
+			Assert( nBindInterface != 0 ); // 0 is reserved, invalid value in Windows.
+
+			// Bind to particular interface for IPv4
+			if ( inaddr->sin_family == AF_INET || ( pnIPv6AddressFamilies && ( *pnIPv6AddressFamilies & k_nAddressFamily_IPv4 ) ) )
+			{
+				// WARNING: interface index should be in network byte order for IPPROTO_IP
+				const DWORD value = htonl(nBindInterface);
+				const int length = sizeof(value);
+				const auto error = setsockopt( sock , IPPROTO_IP, IP_UNICAST_IF, reinterpret_cast<const char*>(&value), length);
+				if (ERROR_SUCCESS != error)
 				{
-					V_sprintf_safe( errMsg, "Failed to set socket for dual stack (IPV6_V6ONLY=0).  Error code 0x%08X.", GetLastSocketError() );
+					V_sprintf_safe( errMsg, "sockopt(IP_PROTO_IP, IP_UNICAST_IF, %d) failed with error code 0x%08X.", nBindInterface, GetLastSocketError() );
 					closesocket( sock );
 					return INVALID_SOCKET;
 				}
-
-				// Let caller know we're IPv6 only, and spew about this.
-				SpewWarning( "Failed to set socket for dual stack (IPV6_V6ONLY=0).  Error code 0x%08X.  Continuing using IPv6 only!\n", GetLastSocketError() );
-				*pnIPv6AddressFamilies = k_nAddressFamily_IPv6;
+				SpewVerbose( "sockopt(IP_PROTO_IP, IP_UNICAST_IF, %d) OK\n", nBindInterface );
 			}
-		}
-		else
-		{
-			// Tell caller what they've got
-			*pnIPv6AddressFamilies = opt ? k_nAddressFamily_IPv6 : k_nAddressFamily_DualStack;
-		}
+
+			// Bind to particular interface for IPv6
+			if ( inaddr->sin_family == AF_INET6 || ( pnIPv6AddressFamilies && ( *pnIPv6AddressFamilies & k_nAddressFamily_IPv6 ) ) )
+			{
+				// WARNING: interface index should be in host byte order for IPPROTO_IPV6
+				auto length = static_cast<int>(sizeof(nBindInterface));
+				const auto error = setsockopt( sock, IPPROTO_IPV6, IPV6_UNICAST_IF, reinterpret_cast<const char*>(&nBindInterface), length);
+				if (ERROR_SUCCESS != error)
+				{
+					V_sprintf_safe( errMsg, "sockopt(IPPROTO_IPV6, IPV6_UNICAST_IF, %d) failed with error code 0x%08X.", nBindInterface, GetLastSocketError() );
+					closesocket( sock );
+					return INVALID_SOCKET;
+				}
+				SpewVerbose( "sockopt(IPPROTO_IPV6, IPV6_UNICAST_IF, %d) OK\n", nBindInterface );
+			}
+		#endif
 	}
 
-	// Bind it to specific desired port and/or interfaces
-	if ( bind( sock, (struct sockaddr *)sockaddr, (socklen_t)len ) == -1 )
+	// Bind it to specific desired local port/IP
+	if ( bind( sock, (struct sockaddr *)pSockaddr, (socklen_t)len ) == -1 )
 	{
 		V_sprintf_safe( errMsg, "Failed to bind socket.  Error code 0x%08X.", GetLastSocketError() );
 		closesocket( sock );
@@ -1479,7 +1647,7 @@ static SOCKET OpenUDPSocketBoundToSockAddr( const void *sockaddr, size_t len, St
 	return sock;
 }
 
-static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback, SteamDatagramErrMsg &errMsg, const SteamNetworkingIPAddr *pAddrLocal, int *pnAddressFamilies )
+static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback, SteamNetworkingErrMsg &errMsg, const SteamNetworkingIPAddr *pAddrLocal, int *pnAddressFamilies, int nBindInterface = -1 )
 {
 	// Creating a socket *should* be fast, but sometimes the OS might need to do some work.
 	// We shouldn't do this too often, give it a little extra time.
@@ -1541,31 +1709,33 @@ static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback
 
 	// Try IPv6?
 	SOCKET sock = INVALID_SOCKET;
-	if ( nAddressFamilies & k_nAddressFamily_IPv6 )
-	{
-		sockaddr_in6 address6;
-		memset( &address6, 0, sizeof(address6) );
-		address6.sin6_family = AF_INET6;
-		memcpy( address6.sin6_addr.s6_addr, addrLocal.m_ipv6, 16 );
-		address6.sin6_port = BigWord( addrLocal.m_port );
-
-		// Try to get socket
-		int nIPv6AddressFamilies = nAddressFamilies;
-		sock = OpenUDPSocketBoundToSockAddr( &address6, sizeof(address6), errMsg, &nIPv6AddressFamilies );
-
-		if ( sock == INVALID_SOCKET )
+	#ifndef PLATFORM_NO_IPV6
+		if ( nAddressFamilies & k_nAddressFamily_IPv6 )
 		{
-			// Allowing fallback to IPv4?
-			if ( nAddressFamilies != k_nAddressFamily_Auto )
-				return nullptr;
+			sockaddr_in6 address6;
+			memset( &address6, 0, sizeof(address6) );
+			address6.sin6_family = AF_INET6;
+			memcpy( address6.sin6_addr.s6_addr, addrLocal.m_ipv6, 16 );
+			address6.sin6_port = BigWord( addrLocal.m_port );
 
-			// Continue below, we'll try IPv4
+			// Try to get socket
+			int nIPv6AddressFamilies = nAddressFamilies;
+			sock = OpenUDPSocketBoundToSockAddr( &address6, sizeof(address6), errMsg, &nIPv6AddressFamilies, nBindInterface );
+
+			if ( sock == INVALID_SOCKET )
+			{
+				// Allowing fallback to IPv4?
+				if ( nAddressFamilies != k_nAddressFamily_Auto )
+					return nullptr;
+
+				// Continue below, we'll try IPv4
+			}
+			else
+			{
+				nAddressFamilies = nIPv6AddressFamilies;
+			}
 		}
-		else
-		{
-			nAddressFamilies = nIPv6AddressFamilies;
-		}
-	}
+	#endif
 
 	// Try IPv4?
 	if ( sock == INVALID_SOCKET )
@@ -1579,7 +1749,7 @@ static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback
 		address4.sin_port = BigWord( addrLocal.m_port );
 
 		// Try to get socket
-		sock = OpenUDPSocketBoundToSockAddr( &address4, sizeof(address4), errMsg, nullptr );
+		sock = OpenUDPSocketBoundToSockAddr( &address4, sizeof(address4), errMsg, nullptr, nBindInterface );
 
 		// If we failed, well, we have no other options left to try.
 		if ( sock == INVALID_SOCKET )
@@ -1603,11 +1773,13 @@ static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback
 		const sockaddr_in *boundaddr4 = (const sockaddr_in *)&addrBound;
 		addrLocal.SetIPv4( BigDWord( boundaddr4->sin_addr.s_addr ), BigWord( boundaddr4->sin_port ) );
 	}
+	#ifndef PLATFORM_NO_IPV6
 	else if ( addrBound.ss_family == AF_INET6 )
 	{
 		const sockaddr_in6 *boundaddr6 = (const sockaddr_in6 *)&addrBound;
 		addrLocal.SetIPv6( boundaddr6->sin6_addr.s6_addr, BigWord( boundaddr6->sin6_port ) );
 	}
+	#endif
 	else
 	{
 		Assert( false );
@@ -1623,8 +1795,15 @@ static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback
 	pSock->m_callback = callback;
 	pSock->m_nAddressFamilies = nAddressFamilies;
 
-	// On windows, tell the socket to set our global "wake" event whenever there is data to read
-	#ifdef _WIN32
+	// How will we wait efficiently for this socket?
+	#ifdef USE_EPOLL
+		if ( !AddFDToEPoll( sock, pSock, errMsg ) )
+		{
+			delete pSock;
+			return nullptr;
+		}
+	#elif defined( _WIN32 )
+		// On windows, tell the socket to set our global "wake" event whenever there is data to read
 		Assert( s_hEventWakeThread != INVALID_HANDLE_VALUE );
 		if ( WSAEventSelect( pSock->m_socket, s_hEventWakeThread, FD_READ ) != 0 )
 		{
@@ -1632,18 +1811,19 @@ static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback
 			V_sprintf_safe( errMsg, "WSAEventSelect() failed.  Error code 0x%08X.", GetLastSocketError() );
 			return nullptr;
 		}
+	#elif defined( USE_POLL )
+		// Rebuild our pollfd list next time
+		s_bRecreatePollList = true;
+	#else
+		#error "How will we poll this socket?"
 	#endif
 
 	// Add to master list.  (Hopefully we usually won't have that many.)
 	s_vecRawSockets.AddToTail( pSock );
 
-	// Rebuild our pollfd list next time
-	#ifndef _WIN32
-		s_bRecreatePollList = true;
-	#endif
 
 	// Wake up background thread so we can start receiving packets on this socket immediately
-	WakeSteamDatagramThread();
+	WakeServiceThread();
 
 	// Give back info on address families
 	if ( pnAddressFamilies )
@@ -1653,7 +1833,7 @@ static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback
 	return pSock;
 }
 
-IRawUDPSocket *OpenRawUDPSocket( CRecvPacketCallback callback, SteamDatagramErrMsg &errMsg, SteamNetworkingIPAddr *pAddrLocal, int *pnAddressFamilies )
+IRawUDPSocket *OpenRawUDPSocket( CRecvPacketCallback callback, SteamNetworkingErrMsg &errMsg, SteamNetworkingIPAddr *pAddrLocal, int *pnAddressFamilies )
 {
 	return OpenRawUDPSocketInternal( callback, errMsg, pAddrLocal, pnAddressFamilies );
 }
@@ -1666,28 +1846,160 @@ static inline void AssertGlobalLockHeldExactlyOnce()
 	#endif
 }
 
-/// Wait on our events / sockets.
-/// Returns true if wake event is set or some socket is ready to be read.
-/// Otherwise, we are idle, and returns false.
-static bool WaitForSocketsOrWakeEvent( int nMaxTimeoutMS )
+/// Draw one specific UDP socket.  Returns false if we detect a
+/// global shutdown attempt and abort
+static bool DrainSocket( CRawUDPSocketImpl *pSock )
 {
 
-	// Wait for data on one of the sockets, or for us to be asked to wake up
-	#if defined( WIN32 )
-		DWORD r = WaitForSingleObject( s_hEventWakeThread, nMaxTimeoutMS );
-		if ( r == WAIT_TIMEOUT )
-			return false; // Idle
-		Assert( r == WAIT_OBJECT_0 );
-		return true;
-	#else
-		int r = poll( s_vecPollFDs.Base(), s_vecPollFDs.Count(), nMaxTimeoutMS );
-		if ( r == 0 )
-			return false; // Idle
-		Assert( r >= 0 );
-		return true;
-	#endif
-}
+	// If the callback gets cleared, that indicates that the socket is pending
+	// destruction and is logically closed, even if the underlying UDP socket
+	// still exists.
+	while ( pSock->m_callback.m_fnCallback )
+	{
+		if ( s_nLowLevelSupportRefCount.load(std::memory_order_acquire) <= 0 )
+			return true; // Abort
 
+		#ifdef STEAMNETWORKINGSOCKETS_LOWLEVEL_TIME_SOCKET_CALLS
+			SteamNetworkingMicroseconds usecRecvFromStart = SteamNetworkingSockets_GetLocalTimestamp();
+		#endif
+
+		char buf[ k_cbSteamNetworkingSocketsMaxUDPMsgLen + 1024 ];
+
+		sockaddr_storage from;
+		socklen_t fromlen = sizeof(from);
+		int ret = ::recvfrom( pSock->m_socket, buf, sizeof( buf ), 0, (sockaddr *)&from, &fromlen );
+		SteamNetworkingMicroseconds usecRecvFromEnd = SteamNetworkingSockets_GetLocalTimestamp();
+
+		#ifdef STEAMNETWORKINGSOCKETS_LOWLEVEL_TIME_SOCKET_CALLS
+			if ( usecRecvFromEnd > s_usecIgnoreLongLockWaitTimeUntil )
+			{
+				SteamNetworkingMicroseconds usecRecvFromElapsed = usecRecvFromEnd - usecRecvFromStart;
+				if ( usecRecvFromElapsed > 1000 )
+				{
+					SpewWarning( "recvfrom took %.1fms\n", usecRecvFromElapsed*1e-3 );
+					ETW_LongOp( "UDP recvfrom", usecRecvFromElapsed );
+				}
+			}
+		#endif
+
+		// Negative value means nothing more to read.
+		//
+		// NOTE 1: We're not checking the cause of failure.  Usually it would be "EWOULDBLOCK",
+		// meaning no more data.  However if there was some socket error (i.e. somebody did something
+		// to reset the network stack, etc) we could make the code more robust by detecting this.
+		// It would require us plumbing through this failure somehow, and all we have here is a callback
+		// for processing packets.  Probably not worth the effort to handle this relatively common case.
+		// It will just appear to the app that the cord is cut on this socket.
+		//
+		// NOTE 2: 0 byte datagram is possible, and in this case recvfrom will return 0.
+		// (But all of our protocols enforce a minimum packet size, so if we get a zero byte packet,
+		// it's a bogus.  We could drop it here but let's send it through the normal mechanism to
+		// be handled/reported in the same way as any other bogus packet.)
+		if ( ret < 0 )
+			break;
+
+		// Add a tag.  If we end up holding the lock for a long time, this tag
+		// will tell us how many packets were processed
+		SteamNetworkingGlobalLock::AssertHeldByCurrentThread( "RecvUDPPacket" );
+
+		// Check simulated global rate limit.  Make sure this is fast
+		// when the limit is not in use
+		if ( unlikely( g_Config_FakeRateLimit_Recv_Rate.Get() > 0 ) )
+		{
+
+			// Check if bucket already has tokens in it, which
+			// will be common.  If so, we can avoid reading the
+			// timer
+			if ( s_flFakeRateLimit_Recv_tokens <= 0.0f )
+			{
+
+				// Update bucket with tokens
+				UpdateFakeRateLimitTokenBuckets( usecRecvFromEnd );
+
+				// Still empty?
+				if ( s_flFakeRateLimit_Recv_tokens <= 0.0f )
+					continue;
+			}
+
+			// Spend tokens
+			s_flFakeRateLimit_Recv_tokens -= ret;
+		}
+
+		// Check for simulating random packet loss
+		if ( RandomBoolWithOdds( g_Config_FakePacketLoss_Recv.Get() ) )
+			continue;
+
+		RecvPktInfo_t info;
+		info.m_adrFrom.SetFromSockadr( &from );
+
+		// If we're dual stack, convert mapped IPv4 back to ordinary IPv4
+		if ( pSock->m_nAddressFamilies == k_nAddressFamily_DualStack )
+			info.m_adrFrom.BConvertMappedToIPv4();
+
+		// Check for tracing
+		if ( g_Config_PacketTraceMaxBytes.Get() >= 0 )
+		{
+			iovec tmp;
+			tmp.iov_base = buf;
+			tmp.iov_len = ret;
+			pSock->TracePkt( false, info.m_adrFrom, 1, &tmp );
+		}
+
+		int32 nPacketFakeLagTotal = g_Config_FakePacketLag_Recv.Get();
+
+		// Check for simulating random packet reordering
+		if ( RandomBoolWithOdds( g_Config_FakePacketReorder_Recv.Get() ) )
+		{
+			nPacketFakeLagTotal += g_Config_FakePacketReorder_Time.Get();
+		}
+
+		// Check for simulating random packet duplication
+		if ( RandomBoolWithOdds( g_Config_FakePacketDup_Recv.Get() ) )
+		{
+			int32 nDupLag = nPacketFakeLagTotal + WeakRandomInt( 0, g_Config_FakePacketDup_TimeMax.Get() );
+			nDupLag = std::max( 1, nDupLag );
+			iovec temp;
+			temp.iov_len = ret;
+			temp.iov_base = buf;
+			s_packetLagQueueRecv.LagPacket( pSock, info.m_adrFrom, nDupLag, 1, &temp );
+		}
+
+		// Check for simulating lag
+		if ( nPacketFakeLagTotal > 0 )
+		{
+			iovec temp;
+			temp.iov_len = ret;
+			temp.iov_base = buf;
+			s_packetLagQueueRecv.LagPacket( pSock, info.m_adrFrom, nPacketFakeLagTotal, 1, &temp );
+		}
+		else
+		{
+			ETW_UDPRecvPacket( info.m_adrFrom, ret );
+
+			info.m_pPkt = buf;
+			info.m_cbPkt = ret;
+			info.m_usecNow = usecRecvFromEnd;
+			info.m_pSock = pSock;
+			pSock->m_callback( info );
+		}
+
+		#ifdef STEAMNETWORKINGSOCKETS_LOWLEVEL_TIME_SOCKET_CALLS
+			SteamNetworkingMicroseconds usecProcessPacketEnd = SteamNetworkingSockets_GetLocalTimestamp();
+			if ( usecProcessPacketEnd > s_usecIgnoreLongLockWaitTimeUntil )
+			{
+				SteamNetworkingMicroseconds usecProcessPacketElapsed = usecProcessPacketEnd - usecRecvFromEnd;
+				if ( usecProcessPacketElapsed > 1000 )
+				{
+					SpewWarning( "process packet took %.1fms\n", usecProcessPacketElapsed*1e-3 );
+					ETW_LongOp( "process packet", usecProcessPacketElapsed );
+				}
+			}
+		#endif
+	}
+
+	// Continue normal operations
+	return true;
+}
 
 /// Poll all of our sockets, and dispatch the packets received.
 /// This will return true if we own the lock, or false if we detected
@@ -1704,10 +2016,12 @@ static bool PollRawUDPSockets( int nMaxTimeoutMS, bool bManualPoll )
 		Assert( pSock->m_callback.m_fnCallback );
 	}
 
-	const int nSocketsToPoll = s_vecRawSockets.Count();
+	#ifndef USE_EPOLL
+		const int nSocketsToPoll = s_vecRawSockets.Count();
+	#endif
 
 	// Recreate pollfd list if needed
-	#ifndef _WIN32
+	#ifdef USE_POLL
 		if ( s_bRecreatePollList )
 		{
 			s_bRecreatePollList = false;
@@ -1718,16 +2032,18 @@ static bool PollRawUDPSockets( int nMaxTimeoutMS, bool bManualPoll )
 				Assert( f != INVALID_SOCKET ); \
 				p.fd = f; \
 				p.events = POLLRDNORM; \
-				p.revents = 0x7fff; /* Make sure kernel is clearing events properly */ \
+				p.revents = POLLEVENT_INVALID; /* Make sure kernel is clearing events properly */ \
 			}
 
 			for ( CRawUDPSocketImpl *pSock: s_vecRawSockets )
 				ADD_POLL_FD( pSock->m_socket );
 
-			#ifdef NN_NINTENDO_SDK
+			#if defined( WAKE_THREAD_USING_EVENT )
 				ADD_POLL_FD( s_hEventWakeThread );
-			#else
+			#elif defined( WAKE_THREAD_USING_SOCKET_PAIR )
 				ADD_POLL_FD( s_hSockWakeThreadRead );
+			#else
+				#error "How will we cancel this poll?"
 			#endif
 		}
 		Assert( s_vecPollFDs.Count() == nSocketsToPoll+1 );
@@ -1749,7 +2065,16 @@ static bool PollRawUDPSockets( int nMaxTimeoutMS, bool bManualPoll )
 		return false; // ABORT THREAD
 
 	// Wait for data on one of the sockets, or for us to be asked to wake up
-	WaitForSocketsOrWakeEvent( nMaxTimeoutMS );
+	#if defined( USE_EPOLL )
+		struct epoll_event epoll_events[ 32 ];
+		int num_epoll_events = epoll_wait( s_epollfd, epoll_events, V_ARRAYSIZE( epoll_events ), nMaxTimeoutMS );
+	#elif defined( USE_POLL )
+		int poll_result = poll( s_vecPollFDs.Base(), s_vecPollFDs.Count(), nMaxTimeoutMS );
+	#elif defined( _WIN32 )
+		WaitForSingleObject( s_hEventWakeThread, nMaxTimeoutMS );
+	#else
+		#error "How do?"
+	#endif
 
 	// We're back awake.  Grab the lock again
 	SteamNetworkingMicroseconds usecStartedLocking = SteamNetworkingSockets_GetLocalTimestamp();
@@ -1778,197 +2103,122 @@ static bool PollRawUDPSockets( int nMaxTimeoutMS, bool bManualPoll )
 			"SteamnetworkingSockets service thread waited %dms for lock!  This directly adds to network latency!  It could be a bug, but it's usually caused by general performance problem such as thread starvation or a debug output handler taking too long.", int( usecElapsedWaitingForLock/1000 ) );
 	}
 
-	// Recv socket data from any sockets that might have data, and execute the callbacks.
-	char buf[ k_cbSteamNetworkingSocketsMaxUDPMsgLen + 1024 ];
+	// Now check on sockets.  When using epoll, we can do this more efficiently
+	#ifdef USE_EPOLL
 
-	// Iterate all sockets
-	for ( int idx = 0 ; idx < nSocketsToPoll ; ++idx )
-	{
-		CRawUDPSocketImpl *pSock = s_vecRawSockets[ idx ];
+		int tries = 0;
+		while ( num_epoll_events > 0 )
+		{
 
-		// Check if this socket has anything
-		#ifdef _WIN32
-			WSANETWORKEVENTS wsaEvents;
-			if ( WSAEnumNetworkEvents( pSock->m_socket, NULL, &wsaEvents ) != 0 )
+			// Make sure we don't get stuck with a bug
+			if ( ++tries > 500 )
 			{
-				AssertMsg1( false, "WSAEnumNetworkEvents failed.  Error code %08x", WSAGetLastError() );
-				continue;
+				AssertMsg( false, "Failed to drain all sockets after iterating %d times?", tries );
+				break;
 			}
-			if ( !(wsaEvents.lNetworkEvents & FD_READ) )
-				continue;
-		#else
-			if ( !( s_vecPollFDs[ idx ].revents & POLLRDNORM ) )
-				continue;
-			Assert( s_vecPollFDs[ idx ].revents != 0x7fff ); // Make sure kernel actually populated this
+
+			// Process all the reported events
+			for ( int i = 0 ; i < num_epoll_events ; ++i )
+			{
+				// Epoll will pass back our userdata.  We put the pointer
+				// to the socket there.
+				auto pSock = (CRawUDPSocketImpl *)epoll_events[ i ].data.ptr;
+
+				// Is it for a real socket, or just a wakuip call?
+				if ( pSock )
+				{
+					if ( !DrainSocket( pSock ) )
+						goto exit_polling;
+				}
+				else
+				{
+					#ifdef WAKE_THREAD_USING_SOCKET_PAIR
+						// It's a wake request.  Just eat one request for now.
+						// I think it's probably safe to eat all of them, but
+						// it's a small optimization and I don't want to debug
+						// it is that's not true.
+						char buf[8];
+						::recv( s_hSockWakeThreadRead, buf, sizeof(buf), 0 );
+					#elif WAKE_THREAD_USING_EVENT
+						#error "Currently we never mix wake events with epoll"
+					#else
+						AssertMsg( false, "Invalid epoll context!" );
+					#endif
+				}
+			}
+
+			// Poll again, but don't block
+			num_epoll_events = epoll_wait( s_epollfd, epoll_events, V_ARRAYSIZE( epoll_events ), 0 );
+		}
+
+	#else
+
+		// On POSIX, check return value, and also handle the wake "fd"
+		#ifdef USE_POLL
+		{
+
+			// Make sure we actually got some descriptors with data
+			if ( poll_result <= 0 )
+			{
+				if ( poll_result < 0 )
+					SpewWarning( "poll() returned %d, errno %d\n", poll_result, errno );
+				goto exit_polling;
+			}
+
+			pollfd &wake = s_vecPollFDs[ nSocketsToPoll ];
+			if ( (int)( wake.revents & POLLRDNORM ) )
+			{
+				Assert( wake.revents != POLLEVENT_INVALID );
+				#if defined( WAKE_THREAD_USING_EVENT )
+					Assert( wake.fd == s_hEventWakeThread );
+					ClearWakeThreadEvent( wake, s_hEventWakeThread );
+				#elif defined( WAKE_THREAD_USING_SOCKET_PAIR )
+					Assert( wake.fd == s_hSockWakeThreadRead );
+
+					// Just eat one request for now.
+					// I think it's probably safe to eat all of them, but
+					// it's a small optimization and I don't want to debug
+					// it is that's not true.
+					char buf[8];
+					::recv( s_hSockWakeThreadRead, buf, sizeof(buf), 0 );
+				#else
+					#error "How did we wake up?"
+				#endif
+			}
+		}
 		#endif
 
-		// Drain the socket.  But if the callback gets cleared, that
-		// indicates that the socket is pending destruction and is
-		// logically closed to the calling code.
-		while ( pSock->m_callback.m_fnCallback )
+		// Not using epoll, just check all sockets
+		for ( int idx = 0 ; idx < nSocketsToPoll ; ++idx )
 		{
-			if ( s_nLowLevelSupportRefCount.load(std::memory_order_acquire) <= 0 )
-				return true; // current thread owns the lock
+			CRawUDPSocketImpl *pSock = s_vecRawSockets[ idx ];
 
-			#ifdef STEAMNETWORKINGSOCKETS_LOWLEVEL_TIME_SOCKET_CALLS
-				SteamNetworkingMicroseconds usecRecvFromStart = SteamNetworkingSockets_GetLocalTimestamp();
-			#endif
-
-			sockaddr_storage from;
-			socklen_t fromlen = sizeof(from);
-			int ret = ::recvfrom( pSock->m_socket, buf, sizeof( buf ), 0, (sockaddr *)&from, &fromlen );
-			SteamNetworkingMicroseconds usecRecvFromEnd = SteamNetworkingSockets_GetLocalTimestamp();
-
-			#ifdef STEAMNETWORKINGSOCKETS_LOWLEVEL_TIME_SOCKET_CALLS
-				if ( usecRecvFromEnd > s_usecIgnoreLongLockWaitTimeUntil )
+			// Check if this socket has anything
+			#ifdef _WIN32
+				WSANETWORKEVENTS wsaEvents;
+				if ( WSAEnumNetworkEvents( pSock->m_socket, NULL, &wsaEvents ) != 0 )
 				{
-					SteamNetworkingMicroseconds usecRecvFromElapsed = usecRecvFromEnd - usecRecvFromStart;
-					if ( usecRecvFromElapsed > 1000 )
-					{
-						SpewWarning( "recvfrom took %.1fms\n", usecRecvFromElapsed*1e-3 );
-						ETW_LongOp( "UDP recvfrom", usecRecvFromElapsed );
-					}
+					AssertMsg1( false, "WSAEnumNetworkEvents failed.  Error code %08x", WSAGetLastError() );
+					continue;
 				}
-			#endif
-
-			// Negative value means nothing more to read.
-			//
-			// NOTE 1: We're not checking the cause of failure.  Usually it would be "EWOULDBLOCK",
-			// meaning no more data.  However if there was some socket error (i.e. somebody did something
-			// to reset the network stack, etc) we could make the code more robust by detecting this.
-			// It would require us plumbing through this failure somehow, and all we have here is a callback
-			// for processing packets.  Probably not worth the effort to handle this relatively common case.
-			// It will just appear to the app that the cord is cut on this socket.
-			//
-			// NOTE 2: 0 byte datagram is possible, and in this case recvfrom will return 0.
-			// (But all of our protocols enforce a minimum packet size, so if we get a zero byte packet,
-			// it's a bogus.  We could drop it here but let's send it through the normal mechanism to
-			// be handled/reported in the same way as any other bogus packet.)
-			if ( ret < 0 )
-				break;
-
-			// Add a tag.  If we end up holding the lock for a long time, this tag
-			// will tell us how many packets were processed
-			SteamNetworkingGlobalLock::AssertHeldByCurrentThread( "RecvUDPPacket" );
-
-			// Check simulated global rate limit.  Make sure this is fast
-			// when the limit is not in use
-			if ( unlikely( g_Config_FakeRateLimit_Recv_Rate.Get() > 0 ) )
-			{
-
-				// Check if bucket already has tokens in it, which
-				// will be common.  If so, we can avoid reading the
-				// timer
-				if ( s_flFakeRateLimit_Recv_tokens <= 0.0f )
-				{
-
-					// Update bucket with tokens
-					UpdateFakeRateLimitTokenBuckets( usecRecvFromEnd );
-
-					// Still empty?
-					if ( s_flFakeRateLimit_Recv_tokens <= 0.0f )
-						continue;
-				}
-
-				// Spend tokens
-				s_flFakeRateLimit_Recv_tokens -= ret;
-			}
-
-			// Check for simulating random packet loss
-			if ( RandomBoolWithOdds( g_Config_FakePacketLoss_Recv.Get() ) )
-				continue;
-
-			RecvPktInfo_t info;
-			info.m_adrFrom.SetFromSockadr( &from );
-
-			// If we're dual stack, convert mapped IPv4 back to ordinary IPv4
-			if ( pSock->m_nAddressFamilies == k_nAddressFamily_DualStack )
-				info.m_adrFrom.BConvertMappedToIPv4();
-
-			// Check for tracing
-			if ( g_Config_PacketTraceMaxBytes.Get() >= 0 )
-			{
-				iovec tmp;
-				tmp.iov_base = buf;
-				tmp.iov_len = ret;
-				pSock->TracePkt( false, info.m_adrFrom, 1, &tmp );
-			}
-
-			int32 nPacketFakeLagTotal = g_Config_FakePacketLag_Recv.Get();
-
-			// Check for simulating random packet reordering
-			if ( RandomBoolWithOdds( g_Config_FakePacketReorder_Recv.Get() ) )
-			{
-				nPacketFakeLagTotal += g_Config_FakePacketReorder_Time.Get();
-			}
-
-			// Check for simulating random packet duplication
-			if ( RandomBoolWithOdds( g_Config_FakePacketDup_Recv.Get() ) )
-			{
-				int32 nDupLag = nPacketFakeLagTotal + WeakRandomInt( 0, g_Config_FakePacketDup_TimeMax.Get() );
-				nDupLag = std::max( 1, nDupLag );
-				iovec temp;
-				temp.iov_len = ret;
-				temp.iov_base = buf;
-				s_packetLagQueueRecv.LagPacket( pSock, info.m_adrFrom, nDupLag, 1, &temp );
-			}
-
-			// Check for simulating lag
-			if ( nPacketFakeLagTotal > 0 )
-			{
-				iovec temp;
-				temp.iov_len = ret;
-				temp.iov_base = buf;
-				s_packetLagQueueRecv.LagPacket( pSock, info.m_adrFrom, nPacketFakeLagTotal, 1, &temp );
-			}
-			else
-			{
-				ETW_UDPRecvPacket( info.m_adrFrom, ret );
-
-				info.m_pPkt = buf;
-				info.m_cbPkt = ret;
-				info.m_usecNow = usecRecvFromEnd;
-				info.m_pSock = pSock;
-				pSock->m_callback( info );
-			}
-
-			#ifdef STEAMNETWORKINGSOCKETS_LOWLEVEL_TIME_SOCKET_CALLS
-				SteamNetworkingMicroseconds usecProcessPacketEnd = SteamNetworkingSockets_GetLocalTimestamp();
-				if ( usecProcessPacketEnd > s_usecIgnoreLongLockWaitTimeUntil )
-				{
-					SteamNetworkingMicroseconds usecProcessPacketElapsed = usecProcessPacketEnd - usecRecvFromEnd;
-					if ( usecProcessPacketElapsed > 1000 )
-					{
-						SpewWarning( "process packet took %.1fms\n", usecProcessPacketElapsed*1e-3 );
-						ETW_LongOp( "process packet", usecProcessPacketElapsed );
-					}
-				}
-			#endif
-		}
-	}
-
-	// On POSIX, check for draining the thread wake "socket"
-	#ifndef _WIN32
-		pollfd &wake = s_vecPollFDs[ nSocketsToPoll ];
-		if ( wake.revents & POLLRDNORM )
-		{
-			Assert( wake.revents != 0x7fff );
-
-			// It's a wake request.  Pull a single packet out of the queue.
-			// We want one wake request to always result in exactly one wake up.
-			// Wake request are relatively rare, and we don't want to skip any
-			// or combine them.  That would result in complicated race conditions
-			// where we stay asleep a lot longer than we should.
-			#ifdef NN_NINTENDO_SDK
-				// Sorry, but this code is covered under NDA with Nintendo, and
-				// we don't have permission to distribute it.
+				if ( !(wsaEvents.lNetworkEvents & FD_READ) )
+					continue;
+			#elif defined( USE_POLL )
+				if ( !( s_vecPollFDs[ idx ].revents & POLLRDNORM ) )
+					continue;
+				Assert( s_vecPollFDs[ idx ].revents != POLLEVENT_INVALID ); // Make sure kernel actually populated this
 			#else
-				Assert( wake.fd == s_hSockWakeThreadRead );
-				::recv( s_hSockWakeThreadRead, buf, sizeof(buf), 0 );
+				#error "How to tell if we need to drain socket?"
 			#endif
-		}
-	#endif
 
+			// Process all packets on this socket.  Bail if we detect
+			// a global shutdown request.
+			if ( !DrainSocket( pSock ) )
+				goto exit_polling;
+		}
+	#endif // USE_EPOLL, else
+
+exit_polling:
 	// We retained the lock
 	return true;
 }
@@ -1991,7 +2241,7 @@ void ProcessPendingDestroyClosedRawUDPSockets()
 	}
 	Assert( !s_bRawSocketPendingDestruction );
 
-	#ifndef _WIN32
+	#ifdef USE_POLL
 		s_bRecreatePollList = true;
 	#endif
 
@@ -2012,6 +2262,400 @@ static void ProcessDeferredOperations()
 	// not polling on them and we know we hold the lock
 	ProcessPendingDestroyClosedRawUDPSockets();
 }
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dual Wifi band support
+//
+/////////////////////////////////////////////////////////////////////////////
+
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DUALWIFI
+
+#include <wlanapi.h>
+static int s_ifaceDualWifiSecondary = -1; // -1 means we haven't tried yet.  Any other negative value means, we tried and failed
+static HANDLE wlanHandle = INVALID_HANDLE_VALUE;
+
+static HMODULE hModuleWlanAPI = NULL;
+
+static 
+DWORD
+(WINAPI *pWlanOpenHandle)(
+    DWORD dwClientVersion,
+    PVOID pReserved,
+    PDWORD pdwNegotiatedVersion,
+    PHANDLE phClientHandle
+);
+
+static
+DWORD
+(WINAPI *pWlanCloseHandle)(
+    HANDLE hClientHandle,
+    PVOID pReserved
+);
+
+static
+DWORD
+(WINAPI *pWlanEnumInterfaces)(
+    HANDLE hClientHandle,
+    PVOID pReserved,
+    PWLAN_INTERFACE_INFO_LIST *ppInterfaceList
+);
+
+static
+DWORD
+( WINAPI *pWlanSetInterface)(
+    HANDLE hClientHandle,
+    CONST GUID *pInterfaceGuid,
+    WLAN_INTF_OPCODE OpCode,
+    DWORD dwDataSize,
+    CONST PVOID pData,
+    PVOID pReserved
+);
+
+static
+DWORD
+( WINAPI *pWlanQueryInterface)(
+    HANDLE hClientHandle,
+    CONST GUID *pInterfaceGuid,
+    WLAN_INTF_OPCODE OpCode,
+    PVOID pReserved,
+    PDWORD pdwDataSize,
+    PVOID *ppData,
+    PWLAN_OPCODE_VALUE_TYPE pWlanOpcodeValueType
+);
+
+
+
+void DualWifiShutdown()
+{
+	if ( wlanHandle != INVALID_HANDLE_VALUE )
+	{
+		(*pWlanCloseHandle)( wlanHandle, nullptr );
+		wlanHandle = INVALID_HANDLE_VALUE;
+	}
+	s_ifaceDualWifiSecondary = -1;
+}
+
+#if WDK_NTDDI_VERSION < 0x0A00000B	// These definitions are available in wlanapi.h in Windows SDK 10.0.22000.0
+// !KLUDGE! Pasted from an early version of wlan.h.
+namespace wlan_new
+{
+#ifdef __midl
+// use the 4-byte enum
+typedef [v1_enum] enum _WLAN_INTF_OPCODE {
+#else
+typedef enum _WLAN_INTF_OPCODE {
+#endif
+    wlan_intf_opcode_autoconf_start = 0x000000000,
+    wlan_intf_opcode_autoconf_enabled,
+    wlan_intf_opcode_background_scan_enabled,
+    wlan_intf_opcode_media_streaming_mode,
+    wlan_intf_opcode_radio_state,
+    wlan_intf_opcode_bss_type,
+    wlan_intf_opcode_interface_state,
+    wlan_intf_opcode_current_connection,
+    wlan_intf_opcode_channel_number,
+    wlan_intf_opcode_supported_infrastructure_auth_cipher_pairs,
+    wlan_intf_opcode_supported_adhoc_auth_cipher_pairs,
+    wlan_intf_opcode_supported_country_or_region_string_list,
+    wlan_intf_opcode_current_operation_mode,
+    wlan_intf_opcode_supported_safe_mode,
+    wlan_intf_opcode_certified_safe_mode,
+    wlan_intf_opcode_hosted_network_capable,
+    wlan_intf_opcode_management_frame_protection_capable,
+    wlan_intf_opcode_secondary_sta_interfaces,
+    wlan_intf_opcode_secondary_sta_synchronized_connections,
+    wlan_intf_opcode_autoconf_end = 0x0fffffff,
+    wlan_intf_opcode_msm_start = 0x10000100,
+    wlan_intf_opcode_statistics,
+    wlan_intf_opcode_rssi,
+    wlan_intf_opcode_msm_end = 0x1fffffff,
+    wlan_intf_opcode_security_start = 0x20010000,
+    wlan_intf_opcode_security_end = 0x2fffffff,
+    wlan_intf_opcode_ihv_start = 0x30000000,
+    wlan_intf_opcode_ihv_end = 0x3fffffff
+} WLAN_INTF_OPCODE, *PWLAN_INTF_OPCODE;
+}
+const WLAN_INTF_OPCODE wlan_intf_opcode_secondary_sta_synchronized_connections = (WLAN_INTF_OPCODE)wlan_new::wlan_intf_opcode_secondary_sta_synchronized_connections;
+const WLAN_INTF_OPCODE wlan_intf_opcode_secondary_sta_interfaces = (WLAN_INTF_OPCODE)wlan_new::wlan_intf_opcode_secondary_sta_interfaces;
+#endif // WDK_NTDDI_VERSION < 0x0A00000B
+
+static void DualWifiInitFailed( const char *fmt, ... )
+{
+	va_list ap;
+	va_start( ap, fmt );
+	char buf[ 512 ];
+	V_vsprintf_safe( buf, fmt, ap );
+	SpewMsg( "DualWifi not detected.  We won't try again.  %s\n", buf );
+	DualWifiShutdown();
+	s_ifaceDualWifiSecondary = -2; // but remember that we failed
+}
+
+static int ConvertInterfaceGuidToIndex(const GUID& interfaceGuid)
+{
+	//
+	// These functions were added with Vista, so load dynamically
+	// in case
+	//
+
+	typedef
+	NETIO_STATUS
+	(NETIOAPI_API_*FnConvertInterfaceGuidToLuid)(
+		_In_ CONST GUID *InterfaceGuid,
+		_Out_ PNET_LUID InterfaceLuid
+		);
+	typedef 
+	NETIO_STATUS
+	(NETIOAPI_API_*FnConvertInterfaceLuidToIndex)(
+		_In_ CONST NET_LUID *InterfaceLuid,
+		_Out_ PNET_IFINDEX InterfaceIndex
+    );
+
+	static HMODULE hModule = LoadLibraryA( "Iphlpapi.dll" );
+	static FnConvertInterfaceGuidToLuid pConvertInterfaceGuidToLuid = hModule ? (FnConvertInterfaceGuidToLuid)GetProcAddress( hModule, "ConvertInterfaceGuidToLuid" ) : nullptr;
+	static FnConvertInterfaceLuidToIndex pConvertInterfaceLuidToIndex = hModule ? (FnConvertInterfaceLuidToIndex)GetProcAddress( hModule, "ConvertInterfaceLuidToIndex" ) : nullptr;;
+	if ( !pConvertInterfaceGuidToLuid || !pConvertInterfaceLuidToIndex )
+	{
+		AssertMsg( false, "How did I get here?" );
+		return -1;
+	}
+
+    NET_LUID interfaceLuid{};
+    auto error = (pConvertInterfaceGuidToLuid)(&interfaceGuid, &interfaceLuid);
+    if ( ERROR_SUCCESS != error )
+	{
+		AssertMsg( false, "ConvertInterfaceGuidToLuid failed 0x%x", error );
+		return -1;
+	}
+
+    NET_IFINDEX interfaceIndex = 0;
+    error = (*pConvertInterfaceLuidToIndex)(&interfaceLuid, &interfaceIndex);
+    if ( ERROR_SUCCESS != error )
+	{
+		AssertMsg( false, "ConvertInterfaceLuidToIndex failed 0x%x", error );
+		return -1;
+	}
+
+    return static_cast<int>(interfaceIndex);
+}
+
+class RenderGUID
+{
+	char buf[64];
+public:
+	RenderGUID( const GUID &guid )
+	{
+		// https://stackoverflow.com/a/18114061/8004137
+		V_sprintf_safe( buf, "{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}",
+			guid.Data1, guid.Data2, guid.Data3, 
+			guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
+			guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
+	}
+	const char *c_str() const { return buf; }
+};
+
+template <typename F>
+bool MyGetProcAddress( F& fn, HMODULE hm, const char *pszName )
+{
+	if ( hm == NULL )
+		fn = nullptr;
+	else
+		fn = (F)GetProcAddress( hm, pszName );
+	return fn != nullptr;
+}
+
+static int GetDualWifiSecondaryInterfaceIndex( int nSimulateMode )
+{
+	// First time attempt?
+	// FIXME - it's not clear to me when I should retry
+	if ( s_ifaceDualWifiSecondary != -1 )
+		return s_ifaceDualWifiSecondary;
+
+	// Dynamically load wlanapi.dll the first time.
+	if ( hModuleWlanAPI == NULL )
+	{
+		hModuleWlanAPI = LoadLibraryA( "wlanapi.dll" );
+		if (
+			!MyGetProcAddress( pWlanOpenHandle, hModuleWlanAPI, "WlanOpenHandle" )
+			|| !MyGetProcAddress( pWlanCloseHandle, hModuleWlanAPI, "WlanCloseHandle" )
+			|| !MyGetProcAddress( pWlanEnumInterfaces, hModuleWlanAPI, "WlanEnumInterfaces" )
+			|| !MyGetProcAddress( pWlanSetInterface, hModuleWlanAPI, "WlanSetInterface" )
+			|| !MyGetProcAddress( pWlanQueryInterface, hModuleWlanAPI, "WlanQueryInterface" )
+		) {
+			DualWifiInitFailed( "Failed to load wlanAPI.DLL" );
+			return -1;
+		}
+	}
+
+	// First time we need to open Wlan session
+	if ( wlanHandle == INVALID_HANDLE_VALUE )
+	{
+		DWORD clientVersion = 2; // Vista+ APIs
+		DWORD curVersion = 0;
+		DWORD error = (*pWlanOpenHandle)(clientVersion, nullptr, &curVersion, &wlanHandle );
+		if ( ERROR_SUCCESS != error || wlanHandle == INVALID_HANDLE_VALUE )
+		{
+			DualWifiInitFailed( "WlanOpenHandle failed 0x%x.", error );
+			return -1;
+		}
+	}
+
+	PWLAN_INTERFACE_INFO_LIST primaryInterfaceList = nullptr;
+	DWORD error = (*pWlanEnumInterfaces)(wlanHandle, nullptr, &primaryInterfaceList);
+	if ( ERROR_SUCCESS != error || !primaryInterfaceList )
+	{
+		DualWifiInitFailed( "WlanEnumInterfaces failed 0x%x.", error );
+		return -1;
+	}
+
+	if ( nSimulateMode == k_nDualWifiEnable_DoNotEnumerate )
+	{
+		DualWifiInitFailed( "Not really checking for capable adapters as per DualWifi_Enable=%d", nSimulateMode );
+		s_ifaceDualWifiSecondary = -1;
+		return -1;
+	}
+
+	// Look for the first Wireless interface that we can enable DualSTA for
+	for ( DWORD idxPrimary = 0 ; idxPrimary < primaryInterfaceList->dwNumberOfItems ; ++idxPrimary )
+	{
+		const GUID primaryInterfaceGuid = primaryInterfaceList->InterfaceInfo[idxPrimary].InterfaceGuid;
+
+		// Get adapter name in UTF8
+		char szInterfaceDescription[ 256 ];
+		memset( szInterfaceDescription, 0, sizeof(szInterfaceDescription) );
+		WideCharToMultiByte(
+			CP_UTF8, // codepage
+			0, // flags
+			primaryInterfaceList->InterfaceInfo[idxPrimary].strInterfaceDescription, -1, // input string and length
+			szInterfaceDescription, sizeof(szInterfaceDescription)-1, // output buffer and SIZE in bytes
+			nullptr, nullptr // no default char, and we don't care if it was used
+		);
+
+		// Try to enable the feature on this adapter.  This is where most adapters should fail.
+		BOOL enable = TRUE;
+		error = (*pWlanSetInterface)(
+			wlanHandle, &primaryInterfaceGuid, wlan_intf_opcode_secondary_sta_synchronized_connections, sizeof(BOOL), static_cast<PVOID>(&enable), nullptr);
+		if ( ERROR_SUCCESS != error )
+		{
+			SpewVerbose( "Dual Wifi support not detected on adapter '%s' (wlan_intf_opcode_secondary_sta_synchronized_connections returned 0x%x)\n", szInterfaceDescription, error );
+			continue;
+		}
+
+		// Feature is detected!
+		SpewMsg( "Dual Wifi support enabled successfully on adapter '%s'\n", szInterfaceDescription );
+
+		PWLAN_INTERFACE_INFO_LIST secondaryInterfaceList = nullptr;
+		DWORD dataSize = 0;
+		error = (*pWlanQueryInterface)(
+			wlanHandle,
+			&primaryInterfaceGuid,
+			wlan_intf_opcode_secondary_sta_interfaces,
+			nullptr,
+			&dataSize,
+			reinterpret_cast<PVOID*>(&secondaryInterfaceList),
+			nullptr);
+		if ( ERROR_SUCCESS != error || !secondaryInterfaceList )
+		{
+			AssertMsg( false, "wlan_intf_opcode_secondary_sta_synchronized_connections succeeded, but wlan_intf_opcode_secondary_sta_interfaces failed 0x%x?", error );
+			continue;
+		}
+
+		for ( DWORD idxSecondary = 0 ; idxSecondary < secondaryInterfaceList->dwNumberOfItems ; ++idxSecondary )
+		{
+			s_ifaceDualWifiSecondary = ConvertInterfaceGuidToIndex( secondaryInterfaceList->InterfaceInfo[ idxSecondary ].InterfaceGuid );
+			if ( s_ifaceDualWifiSecondary >= 0 )
+			{
+				SpewMsg( "Primary DualSTA interfaces %s matched to secondary interface %s, index %d\n",
+					RenderGUID( primaryInterfaceGuid ).c_str(), RenderGUID( secondaryInterfaceList->InterfaceInfo[ idxSecondary ].InterfaceGuid ).c_str(),
+					s_ifaceDualWifiSecondary );
+				return s_ifaceDualWifiSecondary;
+			}
+		}
+
+		AssertMsg( false, "Could not find secondary wifi adapter, even though wlan_intf_opcode_secondary_sta_synchronized_connections succeeded" );
+	}
+
+	// Failed.  This should be common
+	DualWifiInitFailed( "Didn't find any Dual-Wifi-capable Wifi adapters" );
+	return -1;
+}
+
+IRawUDPSocket *CRawUDPSocketImpl::GetDualWifiSecondarySocket( int nEnableSetting )
+{
+	SteamNetworkingErrMsg errMsg;
+
+	switch ( m_eDualWifiStatus )
+	{
+		case k_EDualWifi_NotAttempted:
+		{
+			Assert( m_pDualWifiPartner == nullptr );
+
+			// Locate the secondary interface, if any.
+			int ifaceIndex = -1;
+			if ( nEnableSetting == k_nDualWifiEnable_ForceSimulate )
+			{
+				SpewMsg( "Not actually checking for Dual-wifi support, just creating simulating support, as per DualWifi_Enable=%d\n", nEnableSetting );
+			}
+			else
+			{
+				ifaceIndex = GetDualWifiSecondaryInterfaceIndex( nEnableSetting );
+				if ( ifaceIndex < 0 && nEnableSetting == k_nDualWifiEnable_Enable )
+				{
+					// not found, and we don't want to simulate support.
+					// This will be common!  Don't retry.
+					m_eDualWifiStatus = k_EDualWifi_Done;
+					break;
+				}
+			}
+
+			if ( nEnableSetting == k_nDualWifiEnable_DoNotBind )
+			{
+				SpewMsg( "Not actually creating secondary socket as per DualWifi_Enable=%d\n", nEnableSetting );
+				m_eDualWifiStatus = k_EDualWifi_Done;
+				break;
+			}
+
+			// Create the second socket, binding it the interface as appropriate
+			int nTempAddressFamiles = m_nAddressFamilies;
+			m_pDualWifiPartner = OpenRawUDPSocketInternal( m_callback, errMsg, nullptr, &nTempAddressFamiles, ifaceIndex );
+			if ( !m_pDualWifiPartner )
+			{
+				SpewWarning( "Failed to create dual Wifi secondary socket.  %s\n", errMsg );
+				m_eDualWifiStatus = k_EDualWifi_Done; // Don't retry
+				break;
+			}
+
+			m_eDualWifiStatus = k_EDualWifi_Primary;
+			m_pDualWifiPartner->m_eDualWifiStatus = k_EDualWifi_Secondary;
+			m_pDualWifiPartner->m_pDualWifiPartner = this;
+
+			SpewMsg( "Created %sdual Wifi secondary socket OK.  Primary local address is %s, secondary is %s\n",
+				ifaceIndex < 0 ? "simulated " : "",
+				SteamNetworkingIPAddrRender( m_boundAddr ).c_str(), SteamNetworkingIPAddrRender( m_pDualWifiPartner->m_boundAddr ).c_str() );
+			return m_pDualWifiPartner;
+		}
+
+		case k_EDualWifi_Primary:
+			Assert( m_pDualWifiPartner );
+			return m_pDualWifiPartner;
+
+		default:
+		case k_EDualWifi_Secondary:
+			Assert( false );
+			break;
+
+		case k_EDualWifi_Done:
+			break;
+	}
+
+	return nullptr;
+}
+
+#else
+
+void DualWifiShutdown() {}
+
+#endif
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -2106,7 +2750,7 @@ static void SteamNetworkingThreadProc()
 	// for packets to arrive.
 	#if defined(_WIN32)
 		DbgVerify( SetThreadPriority( GetCurrentThread(), THREAD_PRIORITY_HIGHEST ) );
-	#elif defined(POSIX)
+	#elif IsPosix()
 		// This probably won't work on Linux, because you cannot raise thread priority
 		// without being root.  But on some systems it works.  So we try, and if it
 		// works, great.
@@ -2195,20 +2839,20 @@ static void SteamNetworkingThreadProc()
 	SpewVerbose( "Service thread exiting.\n" );
 }
 
-static void StopSteamDatagramThread()
+static void StopServiceThread()
 {
 	// They should have set some sort of flag that will cause us the thread to stop
 	Assert( s_nLowLevelSupportRefCount.load(std::memory_order_acquire) == 0 || s_bManualPollMode );
 
 	// Send wake up signal
-	WakeSteamDatagramThread();
+	WakeServiceThread();
 
 	// Wait for thread to finish
-	s_pThreadSteamDatagram->join();
+	s_pServiceThread->join();
 
 	// Clean up
-	delete s_pThreadSteamDatagram;
-	s_pThreadSteamDatagram = nullptr;
+	delete s_pServiceThread;
+	s_pServiceThread = nullptr;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -2258,7 +2902,7 @@ static void DedicatedBoundSocketCallback( const RecvPktInfo_t &info, CDedicatedB
 	pSock->m_callback( info );
 }
 
-IBoundUDPSocket *OpenUDPSocketBoundToHost( const netadr_t &adrRemote, CRecvPacketCallback callback, SteamDatagramErrMsg &errMsg )
+IBoundUDPSocket *OpenUDPSocketBoundToHost( const netadr_t &adrRemote, CRecvPacketCallback callback, SteamNetworkingErrMsg &errMsg )
 {
 	SteamNetworkingGlobalLock::AssertHeldByCurrentThread();
 
@@ -2281,7 +2925,7 @@ IBoundUDPSocket *OpenUDPSocketBoundToHost( const netadr_t &adrRemote, CRecvPacke
 	return pBoundSock;
 }
 
-bool CreateBoundSocketPair( CRecvPacketCallback callback1, CRecvPacketCallback callback2, IBoundUDPSocket **ppOutSockets, SteamDatagramErrMsg &errMsg )
+bool CreateBoundSocketPair( CRecvPacketCallback callback1, CRecvPacketCallback callback2, IBoundUDPSocket **ppOutSockets, SteamNetworkingErrMsg &errMsg )
 {
 	SteamNetworkingGlobalLock::AssertHeldByCurrentThread();
 
@@ -2337,7 +2981,7 @@ void CSharedSocket::CallbackRecvPacket( const RecvPktInfo_t &info, CSharedSocket
 	callback( info );
 }
 
-bool CSharedSocket::BInit( const SteamNetworkingIPAddr &localAddr, CRecvPacketCallback callbackDefault, SteamDatagramErrMsg &errMsg )
+bool CSharedSocket::BInit( const SteamNetworkingIPAddr &localAddr, CRecvPacketCallback callbackDefault, SteamNetworkingErrMsg &errMsg )
 {
 	SteamNetworkingGlobalLock::AssertHeldByCurrentThread();
 
@@ -2419,16 +3063,20 @@ void CSharedSocket::RemoteHost::Close()
 static ShortDurationLock s_systemSpewLock( "SystemSpew" );
 SteamNetworkingMicroseconds g_usecLastRateLimitSpew;
 int g_nRateLimitSpewCount;
-ESteamNetworkingSocketsDebugOutputType g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_None; // Option selected by the "system" (environment variable, etc)
 ESteamNetworkingSocketsDebugOutputType g_eAppSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Msg; // Option selected by app
 ESteamNetworkingSocketsDebugOutputType g_eDefaultGroupSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Msg; // Effective value
 FSteamNetworkingSocketsDebugOutput g_pfnDebugOutput = nullptr;
 void (*g_pfnPreFormatSpewHandler)( ESteamNetworkingSocketsDebugOutputType eType, bool bFmt, const char* pstrFile, int nLine, const char *pMsg, va_list ap ) = SteamNetworkingSockets_DefaultPreFormatDebugOutputHandler;
 static bool s_bSpewInitted = false;
 
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_SYSTEMSPEW
 static FILE *g_pFileSystemSpew;
 static SteamNetworkingMicroseconds g_usecSystemLogFileOpened;
-static bool s_bNeedToFlushSystemSpew = false;;
+static bool s_bNeedToFlushSystemSpew = false;
+static ESteamNetworkingSocketsDebugOutputType g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_None; // Option selected by the "system" (environment variable, etc)
+#else
+constexpr ESteamNetworkingSocketsDebugOutputType g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_None; // Option selected by the "system" (environment variable, etc)
+#endif
 
 static void InitSpew()
 {
@@ -2439,53 +3087,55 @@ static void InitSpew()
 	{
 		s_bSpewInitted = true;
 
-		const char *STEAMNETWORKINGSOCKETS_LOG_LEVEL = getenv( "STEAMNETWORKINGSOCKETS_LOG_LEVEL" );
-		if ( !V_isempty( STEAMNETWORKINGSOCKETS_LOG_LEVEL ) )
-		{
-			switch ( atoi( STEAMNETWORKINGSOCKETS_LOG_LEVEL ) )
+		#ifdef STEAMNETWORKINGSOCKETS_ENABLE_SYSTEMSPEW
+			const char *STEAMNETWORKINGSOCKETS_LOG_LEVEL = getenv( "STEAMNETWORKINGSOCKETS_LOG_LEVEL" );
+			if ( !V_isempty( STEAMNETWORKINGSOCKETS_LOG_LEVEL ) )
 			{
-				case 0: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_None; break;
-				case 1: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Warning; break;
-				case 2: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Msg; break;
-				case 3: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Verbose; break;
-				case 4: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Debug; break;
-				case 5: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Everything; break;
-			}
-
-			if ( g_eSystemSpewLevel > k_ESteamNetworkingSocketsDebugOutputType_None )
-			{
-
-				// What log file to use?
-				const char *pszLogFile = getenv( "STEAMNETWORKINGSOCKETS_LOG_FILE" );
-				if ( !pszLogFile )
-					pszLogFile = "steamnetworkingsockets.log" ;
-
-				// Try to open file.  Use binary mode, since we want to make sure we control
-				// when it is flushed to disk
-				g_pFileSystemSpew = fopen( pszLogFile, "wb" );
-				if ( g_pFileSystemSpew )
+				switch ( atoi( STEAMNETWORKINGSOCKETS_LOG_LEVEL ) )
 				{
-					g_usecSystemLogFileOpened = SteamNetworkingSockets_GetLocalTimestamp();
-					time_t now = time(nullptr);
-					fprintf( g_pFileSystemSpew, "Log opened, time %lld %s", (long long)now, ctime( &now ) );
+					case 0: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_None; break;
+					case 1: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Warning; break;
+					case 2: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Msg; break;
+					case 3: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Verbose; break;
+					case 4: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Debug; break;
+					case 5: g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_Everything; break;
+				}
 
-					// if they ask for verbose, turn on some other groups, by default
-					if ( g_eSystemSpewLevel >= k_ESteamNetworkingSocketsDebugOutputType_Verbose )
+				if ( g_eSystemSpewLevel > k_ESteamNetworkingSocketsDebugOutputType_None )
+				{
+
+					// What log file to use?
+					const char *pszLogFile = getenv( "STEAMNETWORKINGSOCKETS_LOG_FILE" );
+					if ( !pszLogFile )
+						pszLogFile = "steamnetworkingsockets.log" ;
+
+					// Try to open file.  Use binary mode, since we want to make sure we control
+					// when it is flushed to disk
+					g_pFileSystemSpew = fopen( pszLogFile, "wb" );
+					if ( g_pFileSystemSpew )
 					{
-						g_ConfigDefault_LogLevel_P2PRendezvous.m_value.m_defaultValue = g_eSystemSpewLevel;
-						g_ConfigDefault_LogLevel_P2PRendezvous.m_value.Set( g_eSystemSpewLevel );
+						g_usecSystemLogFileOpened = SteamNetworkingSockets_GetLocalTimestamp();
+						time_t now = time(nullptr);
+						fprintf( g_pFileSystemSpew, "Log opened, time %lld %s", (long long)now, ctime( &now ) );
 
-						g_ConfigDefault_LogLevel_PacketGaps.m_value.m_defaultValue = g_eSystemSpewLevel-1;
-						g_ConfigDefault_LogLevel_PacketGaps.m_value.Set( g_eSystemSpewLevel-1 );
+						// if they ask for verbose, turn on some other groups, by default
+						if ( g_eSystemSpewLevel >= k_ESteamNetworkingSocketsDebugOutputType_Verbose )
+						{
+							g_ConfigDefault_LogLevel_P2PRendezvous.m_value.m_defaultValue = g_eSystemSpewLevel;
+							g_ConfigDefault_LogLevel_P2PRendezvous.m_value.Set( g_eSystemSpewLevel );
+
+							g_ConfigDefault_LogLevel_PacketGaps.m_value.m_defaultValue = g_eSystemSpewLevel-1;
+							g_ConfigDefault_LogLevel_PacketGaps.m_value.Set( g_eSystemSpewLevel-1 );
+						}
+					}
+					else
+					{
+						// Failed
+						g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_None;
 					}
 				}
-				else
-				{
-					// Failed
-					g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_None;
-				}
 			}
-		}
+		#endif // #ifdef STEAMNETWORKINGSOCKETS_ENABLE_SYSTEMSPEW
 	}
 
 	g_eDefaultGroupSpewLevel = std::max( g_eSystemSpewLevel, g_eAppSpewLevel );
@@ -2495,17 +3145,22 @@ static void InitSpew()
 static void KillSpew()
 {
 	ShortDurationScopeLock scopeLock( s_systemSpewLock );
-	g_eDefaultGroupSpewLevel = g_eSystemSpewLevel = g_eAppSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_None;
+	g_eDefaultGroupSpewLevel = g_eAppSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_None;
 	g_pfnDebugOutput = nullptr;
 	s_bSpewInitted = false;
-	s_bNeedToFlushSystemSpew = false;
-	if ( g_pFileSystemSpew )
-	{
-		fclose( g_pFileSystemSpew );
-		g_pFileSystemSpew = nullptr;
-	}
+
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_SYSTEMSPEW
+		g_eSystemSpewLevel = k_ESteamNetworkingSocketsDebugOutputType_None;
+		s_bNeedToFlushSystemSpew = false;
+		if ( g_pFileSystemSpew )
+		{
+			fclose( g_pFileSystemSpew );
+			g_pFileSystemSpew = nullptr;
+		}
+	#endif
 }
 
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_SYSTEMSPEW
 static void FlushSystemSpewLocked()
 {
 	s_systemSpewLock.AssertHeldByCurrentThread();
@@ -2516,14 +3171,17 @@ static void FlushSystemSpewLocked()
 		s_bNeedToFlushSystemSpew = false;
 	}
 }
+#endif
 
 static void FlushSystemSpew()
 {
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_SYSTEMSPEW
 	if ( s_bNeedToFlushSystemSpew ) // Read the flag without taking the lock first as an optimization, as most of the time it will not be set
 	{
 		ShortDurationScopeLock scopeLock( s_systemSpewLock );
 		FlushSystemSpewLocked();
 	}
+#endif
 }
 
 
@@ -2535,7 +3193,7 @@ void ReallySpewTypeFmt( int eType, const char *pMsg, ... )
 	va_end( ap );
 }
 
-bool BSteamNetworkingSocketsLowLevelAddRef( SteamDatagramErrMsg &errMsg )
+bool BSteamNetworkingSocketsLowLevelAddRef( SteamNetworkingErrMsg &errMsg )
 {
 	SteamNetworkingGlobalLock::AssertHeldByCurrentThread();
 
@@ -2585,16 +3243,18 @@ bool BSteamNetworkingSocketsLowLevelAddRef( SteamDatagramErrMsg &errMsg )
 				return false;
 			}
 
-			#pragma comment( lib, "winmm.lib" )
-			if ( ::timeBeginPeriod( 1 ) != 0 )
-			{
-				::WSACleanup();
-				#ifdef _XBOX_ONE
-					::CoUninitialize();
-				#endif
-				V_strcpy_safe( errMsg, "timeBeginPeriod failed" );
-				return false;
-			}
+			#if !IsXbox()
+				#pragma comment( lib, "winmm.lib" )
+				if ( ::timeBeginPeriod( 1 ) != 0 )
+				{
+					::WSACleanup();
+					#ifdef _XBOX_ONE // Yes I realize this is always false here, but this is shutdown that needs to happen at every return
+						::CoUninitialize();
+					#endif
+					V_strcpy_safe( errMsg, "timeBeginPeriod failed" );
+					return false;
+				}
+			#endif
 		}
 		#endif
 
@@ -2617,14 +3277,23 @@ bool BSteamNetworkingSocketsLowLevelAddRef( SteamDatagramErrMsg &errMsg )
 				V_sprintf_safe( errMsg, "CreateEvent() call failed.  Error code 0x%08x.", GetLastError() );
 				return false;
 			}
-		#elif defined( NN_NINTENDO_SDK )
-			// Sorry, but this code is covered under NDA with Nintendo, and
-			// we don't have permission to distribute it.
+		#elif IsNintendoSwitch()
+			Assert( s_hEventWakeThread == INVALID_SOCKET );
+			s_hEventWakeThread = nn::socket::EventFd( 0, nn::socket::EventFdFlags::Semaphore );
+			if ( s_hEventWakeThread == INVALID_SOCKET )
+			{
+				V_sprintf_safe( errMsg, "nn::socket::EventFd.  Error code 0x%08x.", GetLastError() );
+				return false;
+			}
+		#elif IsPlaystation()
+			// No additional setup needed here
 		#else
+		{
 			Assert( s_hSockWakeThreadRead == INVALID_SOCKET );
 			Assert( s_hSockWakeThreadWrite == INVALID_SOCKET );
+
 			int sockType = SOCK_DGRAM;
-			#ifdef LINUX
+			#if IsLinux()
 				sockType |= SOCK_CLOEXEC;
 			#endif
 			int sock[2];
@@ -2633,21 +3302,42 @@ bool BSteamNetworkingSocketsLowLevelAddRef( SteamDatagramErrMsg &errMsg )
 				V_sprintf_safe( errMsg, "socketpair() call failed.  Error code 0x%08x.", GetLastSocketError() );
 				return false;
 			}
-
 			s_hSockWakeThreadRead = sock[0];
 			s_hSockWakeThreadWrite = sock[1];
 
-			unsigned int opt;
-			opt = 1;
-			if ( ioctlsocket( s_hSockWakeThreadRead, FIONBIO, (unsigned long*)&opt ) != 0 )
+			if ( !SetSocketNonBlocking( s_hSockWakeThreadRead ) )
 			{
 				AssertMsg1( false, "Failed to set socket nonblocking mode.  Error code 0x%08x.", GetLastSocketError() );
 			}
-			opt = 1;
-			if ( ioctlsocket( s_hSockWakeThreadWrite, FIONBIO, (unsigned long*)&opt ) != 0 )
+			if ( !SetSocketNonBlocking( s_hSockWakeThreadWrite ) )
 			{
 				AssertMsg1( false, "Failed to set socket nonblocking mode.  Error code 0x%08x.", GetLastSocketError() );
 			}
+		}
+		#endif
+
+		#ifdef USE_EPOLL
+		{
+			s_epollfd = EPollCreate( errMsg );
+			if ( s_epollfd == INVALID_EPOLL_HANDLE )
+				return false;
+
+			// Add the wake socket to our epoll list.  Set the userdata to NULL.
+			// That's how we know it's just the wake event
+			#if defined( WAKE_THREAD_USING_SOCKET_PAIR )
+				if ( !AddFDToEPoll( s_hSockWakeThreadRead, nullptr, errMsg ) )
+					return false;
+			#elif defined( USE_EPOLL_ABORT )
+				// nothing to do
+			#else
+				#error "How will we cancel this epoll?"
+			#endif
+		}
+		#endif
+
+		// Make sure poll list is recreated upon first use
+		#ifdef USE_POLL
+			s_bRecreatePollList = true;
 		#endif
 
 		SpewMsg( "Initialized low level socket/threading support.\n" );
@@ -2659,8 +3349,8 @@ bool BSteamNetworkingSocketsLowLevelAddRef( SteamDatagramErrMsg &errMsg )
 	s_nLowLevelSupportRefCount.fetch_add(1, std::memory_order_acq_rel);
 
 	// Make sure the thread is running, if it should be
-	if ( !s_bManualPollMode && !s_pThreadSteamDatagram )
-		s_pThreadSteamDatagram = new std::thread( SteamNetworkingThreadProc );
+	if ( !s_bManualPollMode && !s_pServiceThread )
+		s_pServiceThread = new std::thread( SteamNetworkingThreadProc );
 
 	// Install an axexit handler, so that if static destruction is triggered without
 	// cleaning up the library properly, we won't crash.
@@ -2701,8 +3391,8 @@ void SteamNetworkingSocketsLowLevelDecRef()
 	SteamNetworkingGlobalLock::SetLongLockWarningThresholdMS( "SteamNetworkingSocketsLowLevelDecRef", 500 );
 
 	// Stop the service thread, if we have one
-	if ( s_pThreadSteamDatagram )
-		StopSteamDatagramThread();
+	if ( s_pServiceThread )
+		StopServiceThread();
 
 	// Destory wake communication objects
 	#if defined( _WIN32 )
@@ -2711,9 +3401,14 @@ void SteamNetworkingSocketsLowLevelDecRef()
 			CloseHandle( s_hEventWakeThread );
 			s_hEventWakeThread = INVALID_HANDLE_VALUE;
 		}
-	#elif defined( NN_NINTENDO_SDK )
-		// Sorry, but this code is covered under NDA with Nintendo, and
-		// we don't have permission to distribute it.
+	#elif IsNintendoSwitch()
+		if ( s_hEventWakeThread != INVALID_SOCKET )
+		{
+			nn::socket::Close( s_hEventWakeThread );
+			s_hEventWakeThread = INVALID_SOCKET;
+		}
+	#elif IsPlaystation()
+		// Nothing to do here
 	#else
 		if ( s_hSockWakeThreadRead != INVALID_SOCKET )
 		{
@@ -2724,6 +3419,14 @@ void SteamNetworkingSocketsLowLevelDecRef()
 		{
 			closesocket( s_hSockWakeThreadWrite );
 			s_hSockWakeThreadWrite = INVALID_SOCKET;
+		}
+	#endif
+
+	#ifdef USE_EPOLL
+		if ( s_epollfd != INVALID_EPOLL_HANDLE )
+		{
+			EPollClose( s_epollfd );
+			s_epollfd = INVALID_EPOLL_HANDLE;
 		}
 	#endif
 
@@ -2740,6 +3443,14 @@ void SteamNetworkingSocketsLowLevelDecRef()
 		AssertMsg( false, "Trying to close low level socket support, but we still have sockets open!" );
 	}
 
+	// Free any memory in poll list (the only thing that could be left is the read side of
+	// a socket pair used to wake the thread, which we just deleted).  And make sure we rebuild
+	// the list for first use if the library is re-initialized
+	#ifdef USE_POLL
+		s_vecPollFDs.Purge();
+		s_bRecreatePollList = true;
+	#endif
+
 	// Nuke packet lagger queues and make sure we are not registered to think
 	s_packetLagQueueRecv.Clear();
 	s_packetLagQueueSend.Clear();
@@ -2747,9 +3458,14 @@ void SteamNetworkingSocketsLowLevelDecRef()
 	// Shutdown event tracing
 	ETW_Kill();
 
+	// Shutdown Dual wifi support
+	DualWifiShutdown();
+
 	// Nuke sockets and COM
 	#ifdef _WIN32
-		::timeEndPeriod( 1 );
+		#if !IsXbox()
+			::timeEndPeriod( 1 );
+		#endif
 		::WSACleanup();
 	#endif
 	#ifdef _XBOX_ONE
@@ -2836,6 +3552,156 @@ SteamNetworkingMicroseconds SteamNetworkingSockets_GetLocalTimestamp()
 	return usecResult;
 }
 
+bool ResolveHostname( const char* pszHostname, CUtlVector< SteamNetworkingIPAddr > *pAddrs )
+{
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_RESOLVEHOSTNAME
+	char pszHostnameBuffer[256];
+	const char* pszPortStr = V_strchr( (char*)pszHostname, ':' );
+	if ( pszPortStr != nullptr )
+	{
+		const int nChars = ( pszPortStr - pszHostname );
+		if( nChars > ( V_ARRAYSIZE( pszHostnameBuffer ) + 1 ))
+			return false;
+		V_memcpy( pszHostnameBuffer, pszHostname, nChars );
+		pszHostnameBuffer[ nChars ] = '\0';
+		pszPortStr = pszPortStr + 1;
+		pszHostname = pszHostnameBuffer;
+	}
+
+	addrinfo hints;
+	V_memset( &hints, 0, sizeof( hints ) );
+	hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = 0;
+	hints.ai_protocol = 0;
+
+	addrinfo *result = NULL;
+	int nResult = getaddrinfo( pszHostname, pszPortStr, NULL, &result );
+
+	if ( nResult != 0 )
+	{
+		const char* errMsg = gai_strerror( nResult );
+		SpewError( "Name lookup for \"%s\" failed - %s\n", pszHostname, errMsg );
+		return false;
+	}
+	
+	int nPort = 0;
+	if ( pszPortStr != nullptr )
+		nPort = atoi( pszPortStr );
+	for( addrinfo *pInfo = result; pInfo != NULL; pInfo = pInfo->ai_next )
+	{
+		if ( pInfo->ai_addr->sa_family == AF_INET6 )
+		{
+			SteamNetworkingIPAddr ipV6Addr;
+			ipV6Addr.SetIPv6( (const uint8*)&((const sockaddr_in6  *)pInfo->ai_addr)->sin6_addr, nPort );
+			pAddrs->AddToTail( ipV6Addr );
+		}
+		else if ( pInfo->ai_addr->sa_family == AF_INET )
+		{
+			SteamNetworkingIPAddr ipV4Addr;
+			ipV4Addr.SetIPv4( BigDWord( ((sockaddr_in*)pInfo->ai_addr)->sin_addr.s_addr ), nPort );
+			pAddrs->AddToTail( ipV4Addr );
+		}
+	}
+
+	freeaddrinfo( result );
+	return true;
+#else
+	SteamNetworkingIPAddr addr;
+	if ( !addr.ParseString( pszHostname ) )
+		return false;
+	pAddrs->AddToTail( addr );
+	return true;
+#endif
+}
+
+#if defined( _WIN32 ) && !defined( _XBOX_ONE )
+
+#pragma comment( lib, "iphlpapi.lib" )
+
+bool GetLocalAddresses( CUtlVector< SteamNetworkingIPAddr >* pAddrs )
+{
+	if ( pAddrs == nullptr )
+		return false;
+
+    PIP_ADAPTER_ADDRESSES_LH pAddrInfo = nullptr;
+    ULONG dwSize = 16 * 1024;
+    ULONG dwResult = 0;
+
+    // GetAdaptersAddresses can't allocate memory for us, but it will tell us how much memory it wanted for the result,
+    // so the suggested calling method is to iterate like this with an alloc (with the size fed back from the GetAdaptersAddresses call).
+    for ( int i = 0; i < 10; ++i )
+    {
+        pAddrInfo = (IP_ADAPTER_ADDRESSES_LH*)malloc( dwSize );
+        if ( pAddrInfo == nullptr )
+            return false;
+
+        dwResult = GetAdaptersAddresses( AF_UNSPEC, GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_INCLUDE_PREFIX, NULL, pAddrInfo, &dwSize );
+        if ( dwResult == NO_ERROR )
+            break;
+        free( pAddrInfo );
+        pAddrInfo = nullptr;
+        if ( dwResult != ERROR_BUFFER_OVERFLOW )
+            break;
+    }
+
+    if ( dwResult != NO_ERROR )
+    {
+        const char *lpMsgBuf = nullptr;
+        if ( FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 
+                    NULL, dwResult, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), 
+                    // Default language
+                    (LPTSTR) & lpMsgBuf, 0, NULL) )
+        {
+            SpewError( "GetAdaptersAddresses failed - %s", lpMsgBuf );
+            LocalFree( (LPVOID)lpMsgBuf );
+        }
+        return false;
+    }
+    
+    for( PIP_ADAPTER_ADDRESSES_LH pThisInfo = pAddrInfo; pThisInfo != nullptr; pThisInfo = pThisInfo->Next )
+    {
+        for ( PIP_ADAPTER_UNICAST_ADDRESS_LH pThisAddr = pThisInfo->FirstUnicastAddress; pThisAddr != nullptr; pThisAddr = pThisAddr->Next )
+        {
+            if ( pThisAddr->Address.lpSockaddr == nullptr )
+                continue;
+
+            SteamNetworkingIPAddr ipAddr;
+            if ( pThisAddr->Address.lpSockaddr->sa_family == AF_INET )
+            {
+                sockaddr_in* pAddrIN = ( sockaddr_in* )( pThisAddr->Address.lpSockaddr );
+                ipAddr.SetIPv4( ntohl( pAddrIN->sin_addr.s_addr ), pAddrIN->sin_port );
+            }
+            else if ( pThisAddr->Address.lpSockaddr->sa_family == AF_INET6 )
+            {
+                sockaddr_in6* pAddrIN6 = ( sockaddr_in6* )( pThisAddr->Address.lpSockaddr );
+                ipAddr.SetIPv6( pAddrIN6->sin6_addr.u.Byte, pAddrIN6->sin6_port );
+            }
+            else
+            {
+                continue;
+            }
+
+            // Skip loopback addresses (127.0.0.1 and ::1 )
+            if ( ipAddr.IsLocalHost() )
+                continue;
+
+            // Got a host address, record it!
+            pAddrs->AddToTail( ipAddr );
+        }
+    }
+
+    free( pAddrInfo );
+	return true;
+}
+#else
+bool GetLocalAddresses( CUtlVector< SteamNetworkingIPAddr >* pAddrs )
+{
+	return false;
+}
+#endif
+
+
 } // namespace SteamNetworkingSocketsLib
 
 using namespace SteamNetworkingSocketsLib;
@@ -2848,13 +3714,13 @@ STEAMNETWORKINGSOCKETS_INTERFACE void SteamNetworkingSockets_SetManualPollMode( 
 	s_bManualPollMode = bFlag;
 
 	// Check for starting/stopping the thread
-	if ( s_pThreadSteamDatagram )
+	if ( s_pServiceThread )
 	{
 		// Thread is active.  Should it be?
 		if ( s_nLowLevelSupportRefCount.load(std::memory_order_acquire) <= 0 || s_bManualPollMode )
 		{
 			SpewMsg( "Service thread is running, and manual poll mode actiavted.  Stopping service thread.\n" );
-			StopSteamDatagramThread();
+			StopServiceThread();
 		}
 	}
 	else
@@ -2863,7 +3729,7 @@ STEAMNETWORKINGSOCKETS_INTERFACE void SteamNetworkingSockets_SetManualPollMode( 
 		{
 			// Start up the thread
 			SpewMsg( "Service thread is not running, and manual poll mode was turned off, starting service thread.\n" );
-			s_pThreadSteamDatagram = new std::thread( SteamNetworkingThreadProc );
+			s_pServiceThread = new std::thread( SteamNetworkingThreadProc );
 		}
 	}
 }
@@ -2932,6 +3798,22 @@ STEAMNETWORKINGSOCKETS_INTERFACE void SteamNetworkingSockets_DefaultPreFormatDeb
 	char *msgDest = buf;
 	if ( pstrFile )
 	{
+
+		// Skip to "/src/"
+		for (char const* s = pstrFile; *s; ++s)
+		{
+			if (
+				(s[0] == '/' || s[0] == '\\')
+				&& s[1] == 's'
+				&& s[2] == 'r'
+				&& s[3] == 'c'
+				&& (s[4] == '/' || s[4] == '\\')
+			) {
+				pstrFile = s + 1;
+				break;
+			}
+		}
+
 		int l = V_sprintf_safe( buf, "%s(%d): ", pstrFile, nLine );
 		szBuf -= l;
 		msgDest += l;
@@ -2946,24 +3828,26 @@ STEAMNETWORKINGSOCKETS_INTERFACE void SteamNetworkingSockets_DefaultPreFormatDeb
 	V_StripTrailingWhitespaceASCII( buf );
 
 	// Spew to log file?
-	if ( eType <= g_eSystemSpewLevel && g_pFileSystemSpew )
-	{
-		ShortDurationScopeLock scopeLock( s_systemSpewLock ); // WARNING - these locks are not re-entrant, so if we assert while holding it, we could deadlock!
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_SYSTEMSPEW
 		if ( eType <= g_eSystemSpewLevel && g_pFileSystemSpew )
 		{
+			ShortDurationScopeLock scopeLock( s_systemSpewLock ); // WARNING - these locks are not re-entrant, so if we assert while holding it, we could deadlock!
+			if ( eType <= g_eSystemSpewLevel && g_pFileSystemSpew )
+			{
 
-			// Write
-			SteamNetworkingMicroseconds usecLogTime = SteamNetworkingSockets_GetLocalTimestamp() - g_usecSystemLogFileOpened;
-			fprintf( g_pFileSystemSpew, "%8.3f %s\n", usecLogTime*1e-6, buf );
+				// Write
+				SteamNetworkingMicroseconds usecLogTime = SteamNetworkingSockets_GetLocalTimestamp() - g_usecSystemLogFileOpened;
+				fprintf( g_pFileSystemSpew, "%8.3f %s\n", usecLogTime*1e-6, buf );
 
-			// Queue to flush when we we think we can afford to hit the disk synchronously
-			s_bNeedToFlushSystemSpew = true;
+				// Queue to flush when we we think we can afford to hit the disk synchronously
+				s_bNeedToFlushSystemSpew = true;
 
-			// Flush certain critical messages things immediately
-			if ( eType <= k_ESteamNetworkingSocketsDebugOutputType_Error )
-				FlushSystemSpewLocked();
+				// Flush certain critical messages things immediately
+				if ( eType <= k_ESteamNetworkingSocketsDebugOutputType_Error )
+					FlushSystemSpewLocked();
+			}
 		}
-	}
+	#endif
 
 	// Invoke callback
 	FSteamNetworkingSocketsDebugOutput pfnDebugOutput = g_pfnDebugOutput;

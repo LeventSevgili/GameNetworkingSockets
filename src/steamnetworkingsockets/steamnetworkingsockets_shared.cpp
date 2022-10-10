@@ -107,18 +107,6 @@ uint32 Murmorhash32( const void *data, size_t len )
   return h;
 }
 
-uint32 SteamNetworkingIdentityHash::operator()(struct SteamNetworkingIdentity const &x ) const
-{
-	// Make sure we don't have any packing or alignment issues
-	COMPILE_TIME_ASSERT( offsetof( SteamNetworkingIdentity, m_eType ) == 0 );
-	COMPILE_TIME_ASSERT( sizeof( x.m_eType ) == 4 );
-	COMPILE_TIME_ASSERT( offsetof( SteamNetworkingIdentity, m_cbSize ) == 4 );
-	COMPILE_TIME_ASSERT( sizeof( x.m_cbSize ) == 4 );
-	COMPILE_TIME_ASSERT( offsetof( SteamNetworkingIdentity, m_steamID64 ) == 8 );
-
-	return Murmorhash32( &x, sizeof( x.m_eType ) + sizeof( x.m_cbSize ) + x.m_cbSize );
-}
-
 } // namespace SteamNetworkingSocketsLib
 using namespace SteamNetworkingSocketsLib;
 
@@ -140,7 +128,7 @@ STEAMNETWORKINGSOCKETS_INTERFACE void SteamNetworkingIPAddr_ToString( const Stea
 	}
 	else
 	{
-		char temp[ k_ncchMaxIPV6AddrStringWithoutPort ];
+		char temp[ k_cchMaxIPV6AddrStringWithoutPort ];
 		IPv6IPToString( temp, pAddr->m_ipv6 );
 		if ( bWithPort )
 		{

@@ -85,7 +85,7 @@ template <typename L>
 class ILockableThinker : public IThinker
 {
 public:
-	virtual bool TryLock() const final { return m_pLock->try_lock(); }
+	virtual bool TryLock() const override final { return m_pLock->try_lock(); }
 	inline void Unlock() { m_pLock->unlock(); }
 
 	L *m_pLock;
@@ -132,10 +132,15 @@ public:
 	inline void EnsureMinScheduleTime( SteamNetworkingMicroseconds usecWhen ) { Assert( m_pOuter && m_method ); EnsureMinThinkTime( usecWhen ); }
 	inline void EnsureMinScheduleTime( TOuter *pOuter, TMethod method, SteamNetworkingMicroseconds usecWhen )
 	{
-		Cancel(); // !SPEED! If we wrapped this whole thing with the thinker lock, we could avoid this
-		m_pOuter = pOuter;
-		m_method = method;
-		EnsureMinScheduleTime( usecWhen );
+		if ( usecWhen >= IThinker::GetNextThinkTime() )
+		{
+			Assert( m_pOuter == pOuter );
+			Assert( m_method == method );
+		}
+		else
+		{
+			Schedule( pOuter, method, usecWhen );
+		}
 	}
 
 	/// If currently scheduled, cancel it
@@ -161,7 +166,7 @@ protected:
 
 /// A thinker that calls a method on an object that can try to lock itself
 template<typename TOuter>
-class ScheduledMethodThinkerLockable : public ScheduledMethodThinker<TOuter>
+class ScheduledMethodThinkerLockable final : public ScheduledMethodThinker<TOuter>
 {
 public:
 	using super=ScheduledMethodThinker<TOuter>;

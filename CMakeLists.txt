@@ -34,10 +34,6 @@ if(SANITIZE_ADDRESS OR SANITIZE_THREAD OR SANITIZE_MEMORY OR SANITIZE_UNDEFINED)
 endif()
 
 include(FlagsMSVC)
-set(MSVC_RUNTIME "dynamic")
-configure_msvc_runtime()
-print_default_msvc_flags()
-
 add_definitions( -DVALVE_CRYPTO_ENABLE_25519 )
 if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
 	add_definitions(
@@ -46,12 +42,20 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
 		)
 endif()
 
+option(BUILD_STATIC_LIB "Build the static link version of the client library" ON)
+option(BUILD_SHARED_LIB "Build the shared library version of the client library" ON)
+option(BUILD_EXAMPLES "Build the included examples" OFF)
+option(BUILD_TESTS "Build crypto, pki and network connection tests" OFF)
+option(BUILD_TOOLS "Build cert management tool" OFF)
 option(LTO "Enable Link-Time Optimization" OFF)
+option(ENABLE_ICE "Enable support for NAT-punched P2P connections using ICE protocol.  Build native ICE client" ON)
 option(USE_STEAMWEBRTC "Build Google's WebRTC library to get ICE support for P2P" OFF)
 option(Protobuf_USE_STATIC_LIBS "Link with protobuf statically" OFF)
-option(LIGHT_TESTS "Use smaller/shorter tests for simple integration testing (e.g. Travis)" OFF)
-option(GAMENETWORKINGSOCKETS_BUILD_EXAMPLES "Build the included example chat program" ON)
-option(GAMENETWORKINGSOCKETS_BUILD_TESTS "Build crypto, pki and network connection tests" ON)
+if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+	option(MSVC_CRT_STATIC "Link the MSVC CRT statically" OFF)
+	configure_msvc_runtime()
+	print_default_msvc_flags()
+endif()
 
 #
 # Primary crypto library (for AES, SHA256, etc)
@@ -60,7 +64,7 @@ set(useCryptoOptions OpenSSL libsodium BCrypt)
 set(USE_CRYPTO "OpenSSL" CACHE STRING "Crypto library to use for AES/SHA256")
 set_property(CACHE USE_CRYPTO PROPERTY STRINGS ${useCryptoOptions})
 
-list(FIND useCryptoOptions ${USE_CRYPTO} useCryptoIndex)
+list(FIND useCryptoOptions "${USE_CRYPTO}" useCryptoIndex)
 if(useCryptoIndex EQUAL -1)
 	message(FATAL_ERROR "USE_CRYPTO must be one of: ${useCryptoOptions}")
 endif()
@@ -92,25 +96,13 @@ if (WIN32)
 	endif()
 endif()
 
-if (USE_CRYPTO STREQUAL "BCrypt")
-	set(useCrypto25519Default "Reference")
-else()
-	set(useCrypto25519Default "OpenSSL")
-endif()
+if (USE_CRYPTO STREQUAL "OpenSSL")
+	# Match the OpenSSL runtime to our setting.
+	# Note that once found the library paths are cached and will not change if the option is changed.
+	if (MSVC)
+		set(OPENSSL_MSVC_STATIC_RT ${MSVC_CRT_STATIC})
+	endif()
 
-#
-# Secondary crypto library (for ed25519/curve25519).
-#
-set(useCrypto25519Options OpenSSL libsodium Reference)
-set(USE_CRYPTO25519 "${useCrypto25519Default}" CACHE STRING "Crypto library to use for ed25519/curve25519")
-set_property(CACHE USE_CRYPTO25519 PROPERTY STRINGS ${useCrypto25519Options})
-
-list(FIND useCrypto25519Options ${USE_CRYPTO25519} useCrypto25519Index)
-if(useCrypto25519Index EQUAL -1)
-	message(FATAL_ERROR "USE_CRYPTO25519 must be one of: ${useCrypto25519Options}")
-endif()
-
-if (USE_CRYPTO25519 STREQUAL "OpenSSL" OR USE_CRYPTO STREQUAL "OpenSSL")
 	find_package(OpenSSL REQUIRED)
 	message( STATUS "OPENSSL_INCLUDE_DIR = ${OPENSSL_INCLUDE_DIR}" )
 
@@ -166,11 +158,11 @@ function(set_target_common_gns_properties TGT)
 	endif()
 
 	if(CMAKE_SYSTEM_NAME MATCHES Linux)
-		target_compile_definitions(${TGT} PUBLIC POSIX LINUX)
+		target_compile_definitions(${TGT} PUBLIC LINUX)
 	elseif(CMAKE_SYSTEM_NAME MATCHES Darwin)
-		target_compile_definitions(${TGT} PUBLIC POSIX OSX)
+		target_compile_definitions(${TGT} PUBLIC OSX)
 	elseif(CMAKE_SYSTEM_NAME MATCHES FreeBSD)
-		target_compile_definitions(${TGT} PUBLIC POSIX FREEBSD)
+		target_compile_definitions(${TGT} PUBLIC FREEBSD)
 	elseif(CMAKE_SYSTEM_NAME MATCHES Windows)
 		target_compile_definitions(${TGT} PUBLIC _WINDOWS)
 		if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
@@ -214,11 +206,19 @@ function(set_target_common_gns_properties TGT)
 	)
 endfunction()
 
-if(GAMENETWORKINGSOCKETS_BUILD_EXAMPLES)
-	add_subdirectory(examples)
+if(BUILD_EXAMPLES)
+	if ( NOT BUILD_SHARED_LIB )
+		# See also portfile.cmake
+		message(FATAL_ERROR "Must build shared lib (-DBUILD_SHARED_LIB=ON) to build examples")
+	endif()
 endif()
+add_subdirectory(examples) # examples/CMakeLists will check what's defined and only add appropriate targets
 
-if(GAMENETWORKINGSOCKETS_BUILD_TESTS)
+if(BUILD_TESTS)
+	if ( NOT BUILD_STATIC_LIB )
+		# See also portfile.cmake
+		message(FATAL_ERROR "Must build static lib (-DBUILD_STATIC_LIB=ON) to build tests")
+	endif()
 	add_subdirectory(tests)
 endif()
 

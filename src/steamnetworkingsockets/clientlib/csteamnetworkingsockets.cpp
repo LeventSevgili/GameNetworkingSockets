@@ -15,6 +15,10 @@
 #include "csteamnetworkingmessages.h"
 #endif
 
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_FAKEIP
+#include <steam/steamnetworkingfakeip.h>
+#endif
+
 // Needed for the platform checks below
 #if defined(__APPLE__)
 	#include "AvailabilityMacros.h"
@@ -79,7 +83,10 @@ DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, MTU_PacketSize, 1300, k_cbSteamNetwor
 #endif
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, Unencrypted, 0, 0, 3 );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, SymmetricConnect, 0, 0, 1 );
-DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, LocalVirtualPort, -1, -1, 65535 );
+DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, LocalVirtualPort, -1, -1, INT32_MAX );
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DUALWIFI
+DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, DualWifi_Enable, 1, 0, k_nDualWifiEnable_MAX );
+#endif
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, LogLevel_AckRTT, k_ESteamNetworkingSocketsDebugOutputType_Warning, k_ESteamNetworkingSocketsDebugOutputType_Error, k_ESteamNetworkingSocketsDebugOutputType_Everything );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, LogLevel_PacketDecode, k_ESteamNetworkingSocketsDebugOutputType_Warning, k_ESteamNetworkingSocketsDebugOutputType_Error, k_ESteamNetworkingSocketsDebugOutputType_Everything );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, LogLevel_Message, k_ESteamNetworkingSocketsDebugOutputType_Warning, k_ESteamNetworkingSocketsDebugOutputType_Error, k_ESteamNetworkingSocketsDebugOutputType_Everything );
@@ -87,11 +94,16 @@ DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, LogLevel_PacketGaps, k_ESteamNetworki
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, LogLevel_P2PRendezvous, k_ESteamNetworkingSocketsDebugOutputType_Warning, k_ESteamNetworkingSocketsDebugOutputType_Error, k_ESteamNetworkingSocketsDebugOutputType_Everything );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( void *, Callback_ConnectionStatusChanged, nullptr );
 
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DIAGNOSTICSUI
+DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, EnableDiagnosticsUI, 1, 0, 1 );
+#endif
+
 #ifdef STEAMNETWORKINGSOCKETS_ENABLE_ICE
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( std::string, P2P_STUN_ServerList, "" );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( std::string, P2P_TURN_ServerList, "" );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( std::string, P2P_TURN_UserList, "" );
 DEFINE_CONNECTON_DEFAULT_CONFIGVAL( std::string, P2P_TURN_PassList, "" );
+DEFINE_CONNECTON_DEFAULT_CONFIGVAL( int32, P2P_Transport_ICE_Implementation, 0, 0, 2 );
 
 COMPILE_TIME_ASSERT( k_nSteamNetworkingConfig_P2P_Transport_ICE_Enable_Default == -1 );
 COMPILE_TIME_ASSERT( k_nSteamNetworkingConfig_P2P_Transport_ICE_Enable_Disable == 0 );
@@ -135,9 +147,7 @@ GlobalConfigValueEntry::GlobalConfigValueEntry(
 
 static void EnsureConfigValueTableInitted()
 {
-	if ( s_bConfigValueTableInitted )
-		return;
-	SteamNetworkingGlobalLock scopeLock;
+	SteamNetworkingGlobalLock::AssertHeldByCurrentThread( "EnsureConfigValueTableInitted" );
 	if ( s_bConfigValueTableInitted )
 		return;
 
@@ -158,7 +168,7 @@ static void EnsureConfigValueTableInitted()
 		[]( GlobalConfigValueEntry *a, GlobalConfigValueEntry *b ) { return a->m_cbOffsetOf < b->m_cbOffsetOf; } );
 
 	// Rebuild linked list, in order, and safety check for duplicates
-	int N = len( s_vecConfigValueTable );
+	const int N = len( s_vecConfigValueTable );
 	for ( int i = 1 ; i < N ; ++i )
 	{
 		s_vecConfigValueTable[i-1]->m_pNextEntry = s_vecConfigValueTable[i];
@@ -167,16 +177,17 @@ static void EnsureConfigValueTableInitted()
 	s_vecConfigValueTable[N-1]->m_pNextEntry = nullptr;
 
 	s_pFirstGlobalConfigEntry = nullptr;
-	s_bConfigValueTableInitted = true;
+	s_bConfigValueTableInitted = true; // Set this flag LAST
 }
 
 static GlobalConfigValueEntry *FindConfigValueEntry( ESteamNetworkingConfigValue eSearchVal )
 {
-	EnsureConfigValueTableInitted();
+	Assert( s_bConfigValueTableInitted );
 
 	// Binary search
 	int l = 0;
 	int r = len( s_vecConfigValueTable )-1;
+	Assert( r > 0 ); // Order of operations -- table not initialized!
 	while ( l <= r )
 	{
 		int m = (l+r)>>1;
@@ -195,7 +206,7 @@ static GlobalConfigValueEntry *FindConfigValueEntry( ESteamNetworkingConfigValue
 
 void ConnectionConfig::Init( ConnectionConfig *pInherit )
 {
-	EnsureConfigValueTableInitted();
+	Assert( s_bConfigValueTableInitted );
 
 	for ( GlobalConfigValueEntry *pEntry : s_vecConnectionConfigValueTable )
 	{
@@ -254,29 +265,43 @@ static CSteamNetworkConnectionBase *InternalGetConnectionByHandle( HSteamNetConn
 {
 	if ( sock == 0 )
 		return nullptr;
-	TableScopeLock tableScopeLock( g_tables_lock );
-	int idx = g_mapConnections.Find( uint16( sock ) );
-	if ( idx == g_mapConnections.InvalidIndex() )
-		return nullptr;
-	CSteamNetworkConnectionBase *pResult = g_mapConnections[ idx ];
-	if ( !pResult )
-	{
-		AssertMsg( false, "g_mapConnections corruption!" );
-		return nullptr;
-	}
-	if ( uint16( pResult->m_hConnectionSelf ) != uint16( sock ) )
-	{
-		AssertMsg( false, "Connection map corruption!" );
-		return nullptr;
-	}
 
-	// Make sure connection is not in the process of being self-destructed
-	bool bLocked = false;
+	// Take locks by "trying" and using a short timeout.  The table lock
+	// should only be held by any one thread for an extremely short period
+	// of time, so if we end up waiting/looping here, it should be blocked
+	// on the connection lock.  In general we should very seldom need
+	// to actually loop here, but doing this protects against a deadlock,
+	// because in rare situations we do need to take the locks in the
+	// opposite order.
 	for (;;)
 	{
 
+		// First take the table lock
+		TableScopeLock tableScopeLock;
+		if ( !tableScopeLock.TryLock( g_tables_lock, 1, nullptr ) )
+			continue;
+
+		int idx = g_mapConnections.Find( uint16( sock ) );
+		if ( idx == g_mapConnections.InvalidIndex() )
+			break;
+		CSteamNetworkConnectionBase *pResult = g_mapConnections[ idx ];
+		if ( !pResult )
+		{
+			AssertMsg( false, "g_mapConnections corruption!" );
+			break;
+		}
+		if ( uint16( pResult->m_hConnectionSelf ) != uint16( sock ) )
+		{
+			AssertMsg( false, "Connection map corruption!" );
+			break;
+		}
+
 		// Fetch the state of the connection.  This is OK to do
-		// even if we don't have the lock.
+		// even if we don't have the lock.  If the connection
+		// is already dead we can avoid even trying to take
+		// the lock.  That's good because cleaning up is one
+		// of the rare cases where we take locks in the opposite
+		// order, so we want to avoid that.
 		ESteamNetworkingConnectionState s = pResult->GetState();
 		if ( s == k_ESteamNetworkingConnectionState_Dead )
 			break;
@@ -286,25 +311,36 @@ static CSteamNetworkConnectionBase *InternalGetConnectionByHandle( HSteamNetConn
 				break;
 		}
 
-		// Have we locked already?  Then we're good
-		if ( bLocked )
-		{
-			// NOTE: We unlock the table lock here, OUT OF ORDER!
-			return pResult; 
-		}
-
 		// State looks good, try to lock the connection.
 		// NOTE: we still (briefly) hold the table lock!
-		// We *should* be able to totally block here
-		// without creating a deadlock, but looping here
-		// isn't so bad
-		bLocked = scopeLock.TryLock( *pResult->m_pLock, 5, pszLockTag );
-	}
+		// Taking the locks in this order (table, then connection)
+		// is the most common case by far, but in very rare
+		// cases we might need to take them in the opposite
+		// order, hence the loop
+		if ( !scopeLock.TryLock( *pResult->m_pLock, 1, pszLockTag ) )
+			continue;
 
-	// Connection found in table, but should not be returned to the caller.
-	// Unlock the connection, if we locked it
-	if ( bLocked )
+		// Re-check the connection state, in case something changed
+		// while we were waiting on the lock
+		s = pResult->GetState();
+		if ( s != k_ESteamNetworkingConnectionState_Dead )
+		{
+			if ( !bForAPI || BConnectionStateExistsToAPI( s ) )
+			{
+				// NOTE: Exiting this scope will invoke TableScopeLock destructor,
+				// which will unlock the table lock here, OUT OF ORDER of the order
+				// that we took the locks.  That's intentional!  We don't need that
+				// lock anymore, we have locked the connection that we want.
+				return pResult; 
+			}
+		}
+
+		// Connection found in table, but should not be returned to the caller.
+		// Go ahead and immediately unlock the connection lock, the caller should not
+		// need it.
 		scopeLock.Unlock();
+		break;
+	}
 	
 	return nullptr;
 }
@@ -373,19 +409,21 @@ std::vector<CSteamNetworkingSockets *> CSteamNetworkingSockets::s_vecSteamNetwor
 CSteamNetworkingSockets::CSteamNetworkingSockets( CSteamNetworkingUtils *pSteamNetworkingUtils )
 : m_bHaveLowLevelRef( false )
 , m_pSteamNetworkingUtils( pSteamNetworkingUtils )
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_STEAMNETWORKINGMESSAGES
 , m_pSteamNetworkingMessages( nullptr )
-, m_bEverTriedToGetCert( false )
-, m_bEverGotCert( false )
+#endif
 #ifdef STEAMNETWORKINGSOCKETS_CAN_REQUEST_CERT
 , m_scheduleCheckRenewCert( this, &CSteamNetworkingSockets::CheckAuthenticationPrerequisites )
 #endif
+, m_bEverTriedToGetCert( false )
+, m_bEverGotCert( false )
 , m_mutexPendingCallbacks( "pending_callbacks" )
 {
 	m_connectionConfig.Init( nullptr );
-	InternalInitIdentity();
+	InternalClearIdentity();
 }
 
-void CSteamNetworkingSockets::InternalInitIdentity()
+void CSteamNetworkingSockets::InternalClearIdentity()
 {
 	m_identity.Clear();
 	m_msgSignedCert.Clear();
@@ -402,6 +440,11 @@ void CSteamNetworkingSockets::InternalInitIdentity()
 	m_AuthenticationStatus = m_CertStatus;
 	m_bEverTriedToGetCert = false;
 	m_bEverGotCert = false;
+}
+
+void CSteamNetworkingSockets::InternalOnGotIdentity( int nIdentitySetFlags )
+{
+	// No base class action
 }
 
 CSteamNetworkingSockets::~CSteamNetworkingSockets()
@@ -448,11 +491,18 @@ void CSteamNetworkingSockets::KillConnections()
 	SteamNetworkingGlobalLock::AssertHeldByCurrentThread( "CSteamNetworkingSockets::KillConnections" );
 	TableScopeLock tableScopeLock( g_tables_lock );
 
-	// Warn messages interface that it needs to clean up.  We need to do this
-	// because that class has pointers to objects that we are about to destroy.
+	// Nuke all messages endpoints.  We need to do this because the sessions hold
+	// pointers to objects that we are about to destroy.
 	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_STEAMNETWORKINGMESSAGES
-		if ( m_pSteamNetworkingMessages )
-			m_pSteamNetworkingMessages->FreeResources();
+		FOR_EACH_HASHMAP( m_mapMessagesEndpointByVirtualPort, idx )
+		{
+			m_mapMessagesEndpointByVirtualPort[idx]->DestroyMessagesEndPoint();
+			Assert( !m_mapMessagesEndpointByVirtualPort.IsValidIndex( idx ) ); // It should have removed itself from the map!
+		}
+		Assert( m_pSteamNetworkingMessages == nullptr );
+		Assert( m_mapMessagesEndpointByVirtualPort.Count() == 0 );
+		m_pSteamNetworkingMessages = nullptr; // Buuuuut we'll slam it, too, in case there's a bug
+		m_mapMessagesEndpointByVirtualPort.Purge();
 	#endif
 
 	// Destroy all of my connections
@@ -463,6 +513,15 @@ void CSteamNetworkingSockets::KillConnections()
 		if ( pConn->m_pSteamNetworkingSocketsInterface == this )
 		{
 			ConnectionScopeLock connectionLock( *pConn );
+
+			// Check if it was left open, then do what we can to clean it up.
+			// (If we can fire off a quick cleanup packet to our peer, do that.)
+			if ( pConn->BStateIsActive() )
+			{
+				SpewMsg( "[%s] Cleaning up open connection on system shutdown", pConn->GetDescription() );
+				pConn->APICloseConnection( k_ESteamNetConnectionEnd_AppException_Max, "SteamNetworkingSockets shutdown", false );
+			}
+
 			pConn->ConnectionQueueDestroy();
 		}
 	}
@@ -497,16 +556,6 @@ void CSteamNetworkingSockets::Destroy()
 
 	FreeResources();
 
-	// Nuke messages interface, if we had one.
-	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_STEAMNETWORKINGMESSAGES
-		if ( m_pSteamNetworkingMessages )
-		{
-			delete m_pSteamNetworkingMessages;
-			Assert( m_pSteamNetworkingMessages == nullptr ); // Destructor should sever this link
-			m_pSteamNetworkingMessages = nullptr; // Buuuuut we'll slam it, too, in case there's a bug
-		}
-	#endif
-
 	// Remove from list of extant instances, if we are there
 	find_and_remove_element( s_vecSteamNetworkingSocketsInstances, this );
 
@@ -520,7 +569,7 @@ void CSteamNetworkingSockets::FreeResources()
 
 	// Clear identity and crypto stuff.
 	// If we are re-initialized, we might get new ones
-	InternalInitIdentity();
+	InternalClearIdentity();
 
 	// Mark us as no longer being setup
 	if ( m_bHaveLowLevelRef )
@@ -604,6 +653,12 @@ bool CSteamNetworkingSockets::GetCertificateRequest( int *pcbBlob, void *pBlob, 
 		SteamNetworkingIdentityToProtobuf( m_identity, msgCert, identity_string, legacy_identity_binary, legacy_steam_id );
 	}
 
+	// Are we a hosted server running in a data center?
+	// Then cert should be restricted to that PoP
+	SteamNetworkingPOPID popid = GetHostedDedicatedServerPOPID();
+	if ( popid )
+		msgCert.add_gameserver_datacenter_ids( popid );
+
 	// Check size
 	int cb = ProtoMsgByteSize( msgRequest );
 	if ( !pBlob )
@@ -626,6 +681,15 @@ bool CSteamNetworkingSockets::GetCertificateRequest( int *pcbBlob, void *pBlob, 
 
 bool CSteamNetworkingSockets::SetCertificate( const void *pCertificate, int cbCertificate, SteamNetworkingErrMsg &errMsg )
 {
+	SteamNetworkingGlobalLock scopeLock( "SetCertificate" );
+	int nIdentitySetFlags = 0; // Allowing any reading/writing to the durable cache as appropriate
+	return InternalSetCertificate( pCertificate, cbCertificate, errMsg, nIdentitySetFlags );
+}
+
+bool CSteamNetworkingSockets::InternalSetCertificate( const void *pCertificate, int cbCertificate, SteamNetworkingErrMsg &errMsg, int nIdentitySetFlags )
+{
+ 	SteamNetworkingGlobalLock::AssertHeldByCurrentThread( "InternalSetCertificate" );
+
 	// Crack the blob
 	CMsgSteamDatagramCertificateSigned msgCertSigned;
 	if ( !msgCertSigned.ParseFromArray( pCertificate, cbCertificate ) )
@@ -633,8 +697,6 @@ bool CSteamNetworkingSockets::SetCertificate( const void *pCertificate, int cbCe
 		V_strcpy_safe( errMsg, "CMsgSteamDatagramCertificateSigned failed protobuf parse" );
 		return false;
 	}
-
-	SteamNetworkingGlobalLock scopeLock( "SetCertificate" );
 
 	// Crack the cert, and check the signature.  If *we* aren't even willing
 	// to trust it, assume that our peers won't either
@@ -656,12 +718,26 @@ bool CSteamNetworkingSockets::SetCertificate( const void *pCertificate, int cbCe
 		return false;
 	}
 
+	// If we already have an identity, it must match the cert
+	bool bSetIdentity = false;
+	if ( m_identity.IsInvalid() || m_identity.IsLocalHost() )
+	{
+		bSetIdentity = true;
+	}
+	else if ( !( m_identity == certIdentity ) )
+	{
+		V_sprintf_safe( errMsg, "Cert is for identity '%s'.  We are '%s'", SteamNetworkingIdentityRender( certIdentity ).c_str(), SteamNetworkingIdentityRender( m_identity ).c_str() );
+		return false;
+	}
+
 	// We currently only support one key type
 	if ( msgCert.key_type() != CMsgSteamDatagramCertificate_EKeyType_ED25519 || msgCert.key_data().size() != 32 )
 	{
 		V_strcpy_safe( errMsg, "Cert has invalid public key" );
 		return false;
 	}
+
+	// FIXME - should we check if we already have a newer, equivalent cert?
 
 	// Does cert contain a private key?
 	if ( msgCertSigned.has_private_key_data() )
@@ -676,8 +752,7 @@ bool CSteamNetworkingSockets::SetCertificate( const void *pCertificate, int cbCe
 			// We already chose a private key, so the cert must match.
 			// For the most common use cases, we choose a private
 			// key and it never leaves the current process.
-			if ( m_keyPrivateKey.GetRawDataSize() != private_key_data.length()
-				|| memcmp( m_keyPrivateKey.GetRawDataPtr(), private_key_data.c_str(), private_key_data.length() ) != 0 )
+			if ( !m_keyPrivateKey.BMatchesRawData( private_key_data.data(), private_key_data.length() ) )
 			{
 				V_strcpy_safe( errMsg, "Private key mismatch" );
 				return false;
@@ -717,15 +792,10 @@ bool CSteamNetworkingSockets::SetCertificate( const void *pCertificate, int cbCe
 
 	// If we don't know our identity, then set it now.  Otherwise,
 	// it better match.
-	if ( m_identity.IsInvalid() || m_identity.IsLocalHost() )
+	if ( bSetIdentity )
 	{
 		m_identity = certIdentity;
 		SpewMsg( "Local identity established from certificate.  We are '%s'\n", SteamNetworkingIdentityRender( m_identity ).c_str() );
-	}
-	else if ( !( m_identity == certIdentity ) )
-	{
-		V_sprintf_safe( errMsg, "Cert is for identity '%s'.  We are '%s'", SteamNetworkingIdentityRender( certIdentity ).c_str(), SteamNetworkingIdentityRender( m_identity ).c_str() );
-		return false;
 	}
 
 	// Save it off
@@ -733,6 +803,11 @@ bool CSteamNetworkingSockets::SetCertificate( const void *pCertificate, int cbCe
 	m_msgCert = std::move( msgCert );
 	// If shouldn't already be expired.
 	AssertMsg( GetSecondsUntilCertExpiry() > 0, "Cert already invalid / expired?" );
+
+	// If we just got our identity, let derived classes take action.  But our caller is
+	// setting a specific cert, so don't try to load any other cert from the cache
+	if ( bSetIdentity )
+		InternalOnGotIdentity( nIdentitySetFlags | k_nIdentitySetFlag_NoLoadCert );
 
 	// We've got a valid cert
 	SetCertStatus( k_ESteamNetworkingAvailability_Current, "OK" );
@@ -747,14 +822,18 @@ bool CSteamNetworkingSockets::SetCertificate( const void *pCertificate, int cbCe
 
 void CSteamNetworkingSockets::ResetIdentity( const SteamNetworkingIdentity *pIdentity )
 {
-#ifdef STEAMNETWORKINGSOCKETS_STEAM
-	Assert( !"Not supported on steam" );
-#else
+	SteamNetworkingGlobalLock scopeLock( "ResetIdentity" );
 	KillConnections();
-	InternalInitIdentity();
+	InternalClearIdentity();
 	if ( pIdentity )
+	{
 		m_identity = *pIdentity;
-#endif
+		if ( !m_identity.IsInvalid() && !m_identity.IsLocalHost() )
+		{
+			int nIdentitySetFlags = k_nIdentitySetFlag_NoSave; // Allow us to check the durable cache for any credentials, but we know we are empty, so don't save anything
+			InternalOnGotIdentity( nIdentitySetFlags );
+		}
+	}
 }
 
 ESteamNetworkingAvailability CSteamNetworkingSockets::InitAuthentication()
@@ -772,6 +851,9 @@ void CSteamNetworkingSockets::CheckAuthenticationPrerequisites( SteamNetworkingM
 {
 #ifdef STEAMNETWORKINGSOCKETS_CAN_REQUEST_CERT
 	SteamNetworkingGlobalLock::AssertHeldByCurrentThread();
+
+	if ( !BCanRequestCert() )
+		return;
 
 	// Check if we're in flight already.
 	bool bInFlight = BCertRequestInFlight();
@@ -1004,6 +1086,16 @@ HSteamNetConnection CSteamNetworkingSockets::ConnectByIPAddress( const SteamNetw
 	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_FAKEIP
 		if ( address.IsFakeIP() )
 		{
+			// Cannot specify a local port
+			for ( int idxOpt = 0 ; idxOpt < nOptions ; ++idxOpt )
+			{
+				if ( pOptions[idxOpt].m_eValue == k_ESteamNetworkingConfig_LocalVirtualPort )
+				{
+					SpewBug( "Cannot specify LocalVirtualPort when connecting by FakeIP" );
+					return k_HSteamNetConnection_Invalid;
+				}
+			}
+
 			SteamNetworkingIdentity identityRemote;
 			identityRemote.SetIPAddr( address );
 			int nRemoveVirtualPort = -1; // Ignored, we multiplex in this case based on the fake port
@@ -1110,6 +1202,18 @@ bool CSteamNetworkingSockets::GetConnectionName( HSteamNetConnection hPeer, char
 		return false;
 	V_strncpy( pszName, pConn->GetAppName(), nMaxLen );
 	return true;
+}
+
+EResult CSteamNetworkingSockets::ConfigureConnectionLanes( HSteamNetConnection hConn, int nNumLanes, const int *pLanePriorities, const uint16 *pLaneWeights )
+{
+	//SteamNetworkingGlobalLock scopeLock( "ConfigureConnectionLanes" ); // NO, not necessary!
+	ConnectionScopeLock connectionLock;
+	CSteamNetworkConnectionBase *pConn = GetConnectionByHandleForAPI( hConn, connectionLock, "ConfigureConnectionLanes" );
+	if ( !pConn )
+		return k_EResultNoConnection;
+	if ( !pConn->BStateIsActive() )
+		return k_EResultInvalidState;
+	return pConn->SNP_ConfigureLanes( nNumLanes, pLanePriorities, pLaneWeights );
 }
 
 EResult CSteamNetworkingSockets::SendMessageToConnection( HSteamNetConnection hConn, const void *pData, uint32 cbData, int nSendFlags, int64 *pOutMessageNumber )
@@ -1353,16 +1457,17 @@ bool CSteamNetworkingSockets::GetConnectionInfo( HSteamNetConnection hConn, Stea
 	return true;
 }
 
-bool CSteamNetworkingSockets::GetQuickConnectionStatus( HSteamNetConnection hConn, SteamNetworkingQuickConnectionStatus *pStats )
-{
+EResult CSteamNetworkingSockets::GetConnectionRealTimeStatus(
+	HSteamNetConnection hConn,
+	SteamNetConnectionRealTimeStatus_t *pStatus,
+	int nLanes, SteamNetConnectionRealTimeLaneStatus_t *pLanes
+) {
 	//SteamNetworkingGlobalLock scopeLock( "GetQuickConnectionStatus" ); // NO, not necessary!
 	ConnectionScopeLock connectionLock;
-	CSteamNetworkConnectionBase *pConn = GetConnectionByHandleForAPI( hConn, connectionLock, "GetQuickConnectionStatus" );
+	CSteamNetworkConnectionBase *pConn = GetConnectionByHandleForAPI( hConn, connectionLock, "GetConnectionRealTimeStatus" );
 	if ( !pConn )
-		return false;
-	if ( pStats )
-		pConn->APIGetQuickConnectionStatus( *pStats );
-	return true;
+		return k_EResultNoConnection;
+	return pConn->APIGetRealTimeStatus( pStatus, nLanes, pLanes );
 }
 
 int CSteamNetworkingSockets::GetDetailedConnectionStatus( HSteamNetConnection hConn, char *pszBuf, int cbBuf )
@@ -1606,6 +1711,7 @@ void CSteamNetworkingSockets::InternalQueueCallback( int nCallback, int cbCallba
 	m_mutexPendingCallbacks.unlock();
 }
 
+#ifndef STEAMNETWORKINGSOCKETS_ENABLE_FAKEIP
 bool CSteamNetworkingSockets::BeginAsyncRequestFakeIP( int nNumPorts )
 {
 	AssertMsg( false, "FakeIP allocation requires Steam" );
@@ -1614,14 +1720,25 @@ bool CSteamNetworkingSockets::BeginAsyncRequestFakeIP( int nNumPorts )
 
 void CSteamNetworkingSockets::GetFakeIP( int idxFirstPort, SteamNetworkingFakeIPResult_t *pInfo )
 {
-	// Not supported by base class
-	if ( pInfo )
-	{
-		memset( pInfo, 0, sizeof(*pInfo) );
-		GetIdentity( &pInfo->m_identity );
-		pInfo->m_eResult = k_EResultDisabled;
-	}
+// Bleh, I don't want to ship the header to people who don't need it.
+// This would be the right thing to do.
+//	// Not supported by base class
+//	if ( pInfo )
+//	{
+//		memset( pInfo, 0, sizeof(*pInfo) );
+//		GetIdentity( &pInfo->m_identity );
+//		pInfo->m_eResult = k_EResultDisabled;
+//	}
+
+	AssertMsg( false, "FakeIP allocation requires Steam" );
 }
+
+ISteamNetworkingFakeUDPPort *CSteamNetworkingSockets::CreateFakeUDPPort( int idxFakeServerPort )
+{
+	AssertMsg( false, "FakeIP system requires Steam" );
+	return nullptr;
+}
+#endif
 
 EResult CSteamNetworkingSockets::GetRemoteFakeIPForConnection( HSteamNetConnection hConn, SteamNetworkingIPAddr *pOutAddr )
 {
@@ -1629,7 +1746,20 @@ EResult CSteamNetworkingSockets::GetRemoteFakeIPForConnection( HSteamNetConnecti
 	CSteamNetworkConnectionBase *pConn = GetConnectionByHandleForAPI( hConn, connectionLock, "GetRemoteFakeIPForConnection" );
 	if ( !pConn )
 		return k_EResultInvalidParam;
-	return pConn->APIGetRemoteFakeIPForConnection( pOutAddr );
+
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_FAKEIP
+		if ( pConn->m_identityRemote.IsFakeIP() )
+		{
+			if ( pOutAddr )
+				*pOutAddr = pConn->m_identityRemote.m_ip;
+			return k_EResultOK;
+		}
+
+		if ( pConn->m_fakeIPRefRemote.GetInfo( nullptr, pOutAddr ) )
+			return k_EResultOK;
+	#endif
+
+	return k_EResultIPNotFound;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -1637,6 +1767,12 @@ EResult CSteamNetworkingSockets::GetRemoteFakeIPForConnection( HSteamNetConnecti
 // CSteamNetworkingUtils
 //
 /////////////////////////////////////////////////////////////////////////////
+
+CSteamNetworkingUtils::CSteamNetworkingUtils()
+{
+	SteamNetworkingGlobalLock::AssertHeldByCurrentThread( "CSteamNetworkingUtils::CSteamNetworkingUtils" );
+	EnsureConfigValueTableInitted();
+}
 
 CSteamNetworkingUtils::~CSteamNetworkingUtils() {}
 
@@ -2033,7 +2169,7 @@ bool CSteamNetworkingUtils::SetConfigValue( ESteamNetworkingConfigValue eValue,
 				return false;
 
 			// Set the data, possibly fixing up existing queued messages, etc
-			pConn->SetUserData( pConn->m_connectionConfig.m_ConnectionUserData.m_data );
+			pConn->SetUserData( newData );
 			return true;
 		}
 
@@ -2223,8 +2359,6 @@ const char *CSteamNetworkingUtils::GetBuildString()
 {
 	#if defined( STEAMNETWORKINGSOCKETS_OPENSOURCE )
 		return "opensource " __DATE__ " " __TIME__;
-	#elif defined( STEAMNETWORKINGSOCKETS_PARTNER )
-		return "partner " __DATE__ " " __TIME__;
 	#elif defined( STEAMNETWORKINGSOCKETS_STANDALONELIB )
 		return "lib " __DATE__ " " __TIME__;
 	#elif defined( STEAMNETWORKINGSOCKETS_STEAMCLIENT )
@@ -2250,37 +2384,30 @@ const char *CSteamNetworkingUtils::GetBuildString()
 
 const char *CSteamNetworkingUtils::GetPlatformString()
 {
-	#if defined( NN_NINTENDO_SDK )
+	#if IsNintendoSwitch()
 		return "nswitch";
-	#elif defined( _GAMECORE )
-		// Is this right?  This might actually require a system call.
-		return "xboxx";
+	#elif IsXboxScarlett()
+		return "scarlett";
 	#elif defined( _STADIA )
 		// Not sure if this works.
 		return "stadia";
-	#elif defined( _XBOX_ONE )
+	#elif IsXboxOne()
 		return "xbone";
-	#elif defined( _PS4 )
+	#elif IsPS4()
 		return "ps4";
-	#elif defined( _PS5 )
+	#elif IsPS5()
 		return "ps5";
-	#elif defined( TVOS ) || defined( __TVOS__ )
+	#elif IsTVOS()
 		return "tvos";
-	#elif defined( __APPLE__ )
-		#if TARGET_OS_TV
-			return "tvos";
-		#elif TARGET_OS_IPHONE
-			return "ios";
-		#else
-			return "osx";
-		#endif
-	#elif defined( OSX )
+	#elif IsIOS()
+		return "ios";
+	#elif IsOSX()
 		return "osx";
-	#elif defined( ANDROID ) || defined( __ANDROID__ )
+	#elif IsAndroid()
 		return "android";
 	#elif defined( _WINDOWS )
 		return "windows";
-	#elif defined( LINUX ) || defined( __LINUX__ ) || defined(linux) || defined(__linux) || defined(__linux__)
+	#elif IsLinux()
 		return "linux";
 	#elif defined( FREEBSD ) || defined( __FreeBSD__ )
 		return "freebsd";
@@ -2361,7 +2488,7 @@ STEAMNETWORKINGSOCKETS_INTERFACE void GameNetworkingSockets_Destroy(ISteamNetwor
 	}
 }
 
-STEAMNETWORKINGSOCKETS_INTERFACE ISteamNetworkingSockets *SteamNetworkingSockets_LibV11()
+STEAMNETWORKINGSOCKETS_INTERFACE ISteamNetworkingSockets *SteamNetworkingSockets_LibV12()
 {
 	return s_pSteamNetworkingSockets;
 }
@@ -2371,5 +2498,17 @@ STEAMNETWORKINGSOCKETS_INTERFACE ISteamNetworkingUtils *SteamNetworkingUtils_Lib
 	static CSteamNetworkingUtils s_utils;
 	return &s_utils;
 }
+
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_STEAMNETWORKINGMESSAGES
+
+STEAMNETWORKINGSOCKETS_INTERFACE ISteamNetworkingMessages* SteamNetworkingMessages_LibV2()
+{
+	if ( !s_pSteamNetworkingSockets )
+		return nullptr;
+
+	return s_pSteamNetworkingSockets->GetSteamNetworkingMessages();
+}
+
+#endif//STEAMNETWORKINGSOCKETS_ENABLE_STEAMNETWORKINGMESSAGES
 
 #endif

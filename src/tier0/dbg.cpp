@@ -8,11 +8,11 @@
 
 #include <tier0/dbg.h>
 
-#ifdef STEAMNETWORKINGSOCKETS_FOREXPORT
+#if defined ( STEAMDATAGRAM_GAMECOORDINATOR_FOREXPORT )
+extern void SteamDatagramGame_AssertFailed( bool bFmt, const char* pstrFile, unsigned int nLine, const char *pMsg, va_list ap );
+#elif defined( STEAMNETWORKINGSOCKETS_FOREXPORT )
 #include "../steamnetworkingsockets/clientlib/steamnetworkingsockets_lowlevel.h"
 using namespace SteamNetworkingSocketsLib;
-#elif defined ( STEAMDATAGRAM_GAMECOORDINATOR_FOREXPORT )
-extern void SteamDatagramGame_AssertFailed( bool bFmt, const char* pstrFile, unsigned int nLine, const char *pMsg, va_list ap );
 #endif
 
 #if defined(_WIN32) && !defined(_XBOX)
@@ -22,24 +22,30 @@ extern void SteamDatagramGame_AssertFailed( bool bFmt, const char* pstrFile, uns
 
 #include <assert.h>
 
-#ifdef POSIX
-#include <unistd.h>
-#include <signal.h>
+#if IsPosix()
+	#include <unistd.h>
+	#if !IsPlaystation()
+		#include <signal.h>
+	#endif
 #endif // POSIX
 
-#ifdef LINUX
+#if IsLinux()
 #include <sys/ptrace.h>
 #endif
 
-#ifdef OSX
+#if IsOSX()
 #include <sys/sysctl.h>
+#endif
+
+#if IsPlaystation() && defined(_DEBUG)
+// NDA material
 #endif
 
 bool Plat_IsInDebugSession()
 {
 #ifdef _WIN32
 	return (IsDebuggerPresent() != 0);
-#elif defined(OSX)
+#elif IsOSX()
 	int mib[4];
 	struct kinfo_proc info;
 	size_t size;
@@ -51,7 +57,7 @@ bool Plat_IsInDebugSession()
 	info.kp_proc.p_flag = 0;
 	sysctl(mib,4,&info,&size,NULL,0);
 	return ((info.kp_proc.p_flag & P_TRACED) == P_TRACED);
-#elif defined(LINUX)
+#elif IsLinux()
 	static FILE *fp;
 	if ( !fp )
 	{
@@ -78,12 +84,12 @@ bool Plat_IsInDebugSession()
 		}
 	}
 	return (nTracePid != 0);
-#elif defined( _PS3 )
-#ifdef _CERT
+#elif IsPlaystation()
+	// NDA material
+#elif IsNintendoSwitch()
 	return false;
 #else
-	return snIsDebuggerPresent();
-#endif
+	#error "HALP"
 #endif
 }
 
@@ -99,10 +105,10 @@ void AssertMsgImplementationV( bool _bFatal, bool bFmt, const char* pstrFile, un
 	}
 	++s_ThreadLocalAssertMsgGuardStatic;
 
-	#ifdef STEAMNETWORKINGSOCKETS_FOREXPORT
-		(*g_pfnPreFormatSpewHandler)( k_ESteamNetworkingSocketsDebugOutputType_Bug, bFmt, pstrFile, nLine, pMsg, ap );
-	#elif defined ( STEAMDATAGRAM_GAMECOORDINATOR_FOREXPORT )
+	#if defined ( STEAMDATAGRAM_GAMECOORDINATOR_FOREXPORT )
 		SteamDatagramGame_AssertFailed( bFmt, pstrFile, nLine, pMsg, ap );
+	#elif defined( STEAMNETWORKINGSOCKETS_FOREXPORT )
+		(*g_pfnPreFormatSpewHandler)( k_ESteamNetworkingSocketsDebugOutputType_Bug, bFmt, pstrFile, nLine, pMsg, ap );
 	#else
 		fflush(stdout);
 		if ( pstrFile )

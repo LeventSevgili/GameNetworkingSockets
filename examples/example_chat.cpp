@@ -22,7 +22,7 @@
 #include <steam/steam_api.h>
 #endif
 
-#ifdef WIN32
+#ifdef _WIN32
 	#include <windows.h> // Ug, for NukeProcess -- see below
 #else
 	#include <unistd.h>
@@ -43,7 +43,7 @@ SteamNetworkingMicroseconds g_logTimeZero;
 // down the thread that is reading from stdin.
 static void NukeProcess( int rc )
 {
-	#ifdef WIN32
+	#ifdef _WIN32
 		ExitProcess( rc );
 	#else
 		(void)rc; // Unused formal parameter
@@ -97,11 +97,11 @@ static void InitSteamDatagramConnectionSockets()
 		if ( !GameNetworkingSockets_Init( nullptr, errMsg ) )
 			FatalError( "GameNetworkingSockets_Init failed.  %s", errMsg );
 	#else
-		SteamDatagramClient_SetAppID( 570 ); // Just set something, doesn't matter what
-		//SteamDatagramClient_SetUniverse( k_EUniverseDev );
+		SteamDatagram_SetAppID( 570 ); // Just set something, doesn't matter what
+		SteamDatagram_SetUniverse( false, k_EUniverseDev );
 
 		SteamDatagramErrMsg errMsg;
-		if ( !SteamDatagramClient_Init( true, errMsg ) )
+		if ( !SteamDatagramClient_Init( errMsg ) )
 			FatalError( "SteamDatagramClient_Init failed.  %s", errMsg );
 
 		// Disable authentication when running with Steam, for this

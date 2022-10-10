@@ -11,24 +11,24 @@ find_package(absl QUIET)
 
 if(NOT absl_FOUND)
 	set(STEAMWEBRTC_ABSL_SOURCE submodule PARENT_SCOPE)
+	set(STEAMWEBRTC_ABSL_SOURCE submodule)
 
 	set(abseil_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../abseil)
-	if(NOT EXISTS ${abseil_SOURCE_DIR}/CMakeLists.txt)
-		message(FATAL_ERROR "abeil submodule not initialized.\n(Try 'git submodule update src/external/abseil')" )
-	endif()
+	check_submodule( ${abseil_SOURCE_DIR} ${abseil_SOURCE_DIR}/CMakeLists.txt )
+
 	add_subdirectory(${abseil_SOURCE_DIR} ${CMAKE_BINARY_DIR}/abseil EXCLUDE_FROM_ALL)
 	if(LTO)
 		set_property(DIRECTORY ${abseil_SOURCE_DIR} PROPERTY INTERPROCEDURAL_OPTIMIZATION ON)
 	endif()
 else()
 	set(STEAMWEBRTC_ABSL_SOURCE package PARENT_SCOPE)
+	set(STEAMWEBRTC_ABSL_SOURCE package)
 endif()
 
 set(webrtc_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../webrtc)
+check_submodule( ${webrtc_SOURCE_DIR} ${webrtc_SOURCE_DIR}/rtc_base )
+
 #FIXME set(webrtc_BUILD_DIR ????? )
-if(NOT EXISTS ${webrtc_SOURCE_DIR}/rtc_base)
-	message(FATAL_ERROR "webrtc submodule not initialized.\n(Try: 'git submodule update src/external/webrtc')" )
-endif()
 
 include (CheckTypeSize)
 CHECK_TYPE_SIZE("void*" CMAKE_SIZEOF_VOID_P)
@@ -783,7 +783,16 @@ set_property(TARGET steamwebrtc PROPERTY POSITION_INDEPENDENT_CODE ON)
 install(
 	TARGETS
 		steamwebrtc webrtc-lite
+	EXPORT steamwebrtc
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 	)
+
+if (NOT STEAMWEBRTC_ABSL_SOURCE STREQUAL submodule)
+	install(
+		EXPORT steamwebrtc
+		DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/GameNetworkingSockets
+		NAMESPACE GameNetworkingSockets::
+		)
+endif()

@@ -121,10 +121,33 @@ public:
 	/// get any further callbacks.
 	virtual void Close() = 0;
 
+	/// Check if Dual Wifi support is available, and if so, return the secondary socket.
+	/// The first time this is called, we will check for support and attempt to open a socket.
+	/// Thereafter, we will merely return the result of the first attempt
+	enum EDualWifiStatus
+	{
+		k_EDualWifi_NotAttempted,
+		k_EDualWifi_Done, // Failed or closed; don't try again
+		k_EDualWifi_Primary, // We're the primary.  m_pDualWifiPartner is the secondary
+		k_EDualWifi_Secondary, // We're the secondary.  m_pDualWifiPartner is the primary
+	};
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DUALWIFI
+		virtual IRawUDPSocket *GetDualWifiSecondarySocket( int nEnableSetting ) = 0;
+		inline bool IsDualWifiSecondary() const { return m_eDualWifiStatus == k_EDualWifi_Secondary; }
+	#else
+		inline IRawUDPSocket *GetDualWifiSecondarySocket( int nEnableSetting ) { return nullptr; }
+		inline bool IsDualWifiSecondary() const { return false; }
+	#endif
+
 	/// The local address we ended up binding to
 	SteamNetworkingIPAddr m_boundAddr;
 
 protected:
+
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DUALWIFI
+		EDualWifiStatus m_eDualWifiStatus = k_EDualWifi_NotAttempted;
+	#endif
+
 	IRawUDPSocket();
 	virtual ~IRawUDPSocket();
 };
@@ -227,6 +250,11 @@ public:
 	{
 		return m_pRawSock->BSendRawPacket( pPkt, cbPkt, adrTo );
 	}
+	
+	bool BSendRawPacketGather( int nChunks, const iovec *pChunks, const SteamNetworkingIPAddr &adrTo ) const
+	{
+		return m_pRawSock->BSendRawPacketGather( nChunks, pChunks, adrTo );
+	}
 
 	const SteamNetworkingIPAddr *GetBoundAddr() const
 	{
@@ -274,6 +302,8 @@ private:
 
 	static void CallbackRecvPacket( const RecvPktInfo_t &info, CSharedSocket *pSock );
 };
+
+extern int g_cbUDPSocketBufferSize;
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -571,7 +601,7 @@ extern void SteamNetworkingSocketsLowLevelValidate( CValidator &validator );
 
 /// Wake up the service thread ASAP.  Intended to be called from other threads,
 /// but is safe to call from the service thread as well.
-extern void WakeSteamDatagramThread();
+extern void WakeServiceThread();
 
 class CQueuedTask;
 
@@ -627,30 +657,31 @@ public:
 	/// Function call used to try to take the lock
 	typedef bool (*FTryLockFunc)( void *lock, int msTimeOut, const char *pszTag );
 
-	/// Set the locking mechanism that we should acquire before trying to
-	/// run the task.  You must use this if the target might be deleted
-	/// while the task is run.  If there is no chance of the target being
-	/// deleted while the tasks are being run, then this is not necessary.
-	inline void SetLockFunc( FTryLockFunc func, void *lock, const char *pszTag = nullptr )
-	{
-		m_lockFunc = func;
-		m_lockFuncArg = lock;
-		if ( pszTag )
-			m_pszTag = pszTag;
-	}
-
-	/// Adapter for typed locks
-	template<typename TLock>
-	inline void SetLock( TLock &lock, const char *pszTag = nullptr )
-	{
-		m_lockFunc = []( void *pLock, int msTimeOut, const char *pszTagArg ) -> bool
-		{
-			return ((TLock *)pLock)->try_lock_for( msTimeOut, pszTagArg );
-		};
-		m_lockFuncArg = &lock;
-		if ( pszTag )
-			m_pszTag = pszTag;
-	}
+// !FIXME! Hasn't been tested.  And tehre isn't a good mechanism for unlocking.
+//	/// Set the locking mechanism that we should acquire before trying to
+//	/// run the task.  You must use this if the target might be deleted
+//	/// while the task is run.  If there is no chance of the target being
+//	/// deleted while the tasks are being run, then this is not necessary.
+//	inline void SetLockFunc( FTryLockFunc func, void *lock, const char *pszTag = nullptr )
+//	{
+//		m_lockFunc = func;
+//		m_lockFuncArg = lock;
+//		if ( pszTag )
+//			m_pszTag = pszTag;
+//	}
+//
+//	/// Adapter for typed locks
+//	template<typename TLock>
+//	inline void SetLock( TLock &lock, const char *pszTag = nullptr )
+//	{
+//		m_lockFunc = []( void *pLock, int msTimeOut, const char *pszTagArg ) -> bool
+//		{
+//			return ((TLock *)pLock)->try_lock_for( msTimeOut, pszTagArg );
+//		};
+//		m_lockFuncArg = &lock;
+//		if ( pszTag )
+//			m_pszTag = pszTag;
+//	}
 
 protected:
 	virtual void Run() = 0;
@@ -674,9 +705,13 @@ private:
 	CQueuedTask *m_pNextTaskInQueue = nullptr;
 	CQueuedTask *m_pPrevTaskForTarget = nullptr;
 	CQueuedTask *m_pNextTaskForTarget = nullptr;
-	FTryLockFunc m_lockFunc = nullptr;
-	void *m_lockFuncArg = nullptr;
+
+	// FIXME Locking hasn't been tested, and doesn't have a good
+	// mechanism for unlocking.
+	static constexpr FTryLockFunc m_lockFunc = nullptr;
+	static constexpr void *m_lockFuncArg = nullptr;
 	const char *m_pszTag = nullptr;
+
 	volatile ETaskState m_eTaskState = k_ETaskState_Init;
 };
 
@@ -731,6 +766,9 @@ extern void SteamNetworkingSockets_SetDebugOutputFunction( ESteamNetworkingSocke
 
 /// Return true if it looks like the address is a local address
 extern bool IsRouteToAddressProbablyLocal( netadr_t addr );
+
+extern bool ResolveHostname( const char* pszHostname, CUtlVector< SteamNetworkingIPAddr > *pAddrs );
+extern bool GetLocalAddresses( CUtlVector< SteamNetworkingIPAddr >* pAddrs );
 
 #ifdef STEAMNETWORKINGSOCKETS_ENABLE_ETW
 	extern void ETW_Init();

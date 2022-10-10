@@ -14,7 +14,7 @@
 #include <steam/isteamnetworkingutils.h>
 #include <steam/steamnetworkingcustomsignaling.h>
 
-#ifdef POSIX
+#ifdef VALVE_POSIX
 	#include <unistd.h>
 	#include <sys/socket.h>
 	#include <sys/types.h>
@@ -373,7 +373,7 @@ next_message:
 		}
 	}
 
-	virtual void Release()
+	virtual void Release() override
 	{
 		// NOTE: Here we are assuming that the calling code has already cleaned
 		// up all the connections, to keep the example simple.

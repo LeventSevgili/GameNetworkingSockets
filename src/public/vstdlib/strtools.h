@@ -22,10 +22,16 @@
 #include <minbase/minbase_identify.h>
 #include <minbase/minbase_annotations.h>
 
+BEGIN_TIER1_NAMESPACE
+
 template< class T > class CUtlMemory;
 template< class T, class A > class CUtlVector;
 template < typename K, typename T, typename I, typename L > class CUtlMap;
 class CUtlBuffer;
+
+END_TIER1_NAMESPACE
+
+BEGIN_TIER0_NAMESPACE
 
 #ifdef _WIN64
 #define str_size unsigned int
@@ -98,13 +104,13 @@ extern void V_StripTrailingWhitespaceASCII( char *pch );
 // trim whitespace from both ends of the string
 extern int V_StrTrim( char *pStr );
 
-#ifdef POSIX
-#ifdef ANDROID
+#if IsPosix()
+#if IsAndroid()
 #include <wchar.h>
 #endif
 #define _atoi64 atoll
 #define _wtoi(arg) wcstol(arg, NULL, 10)
-#ifdef ANDROID
+#if IsAndroid()
 // TODO - Android doesn't support wcstoi64, so just use a basic implementation of our own.
 #define _wcstoi64 vstdlib_wcstoi64
 #define _wcstoui64 vstdlib_wcstoui64
@@ -118,7 +124,7 @@ extern int V_StrTrim( char *pStr );
 #define _strtoi64 strtoll
 #define _strtoui64 strtoull
 #define _vsnprintf vsnprintf
-#if defined(OSX) || defined(ANDROID)
+#if IsOSX() || IsAndroid()
 // TODO - OSX doesn't support wcscasecmp until 10.7, so just
 // use a basic implementation of our own.
 #define _wcsicmp vstdlib_wcsicmp
@@ -133,7 +139,8 @@ extern int V_StrTrim( char *pStr );
 #endif
 #define TEXT(str) str
 
-#endif // POSIX
+#endif // IsPosix()
 
+END_TIER0_NAMESPACE
 
 #endif	// VSTDLIB_STRTOOLS_H

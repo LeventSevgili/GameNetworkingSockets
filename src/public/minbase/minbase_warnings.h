@@ -30,6 +30,11 @@
 #pragma GCC diagnostic ignored "-Wtype-limits"
 #endif
 
+#if defined( __PROSPERO__ ) || defined( __ORBIS__ ) /* This is the wrong way to detect this.  HALP */
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wreorder-ctor"
+#endif
+
 #endif // #if defined( COMPILER_GCC )
 
 #if defined( COMPILER_SNC )

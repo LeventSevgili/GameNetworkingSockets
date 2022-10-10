@@ -3,7 +3,7 @@
 #include "crypto_25519.h"
 #include <tier0/dbg.h>
 
-#ifdef STEAMNETWORKINGSOCKETS_CRYPTO_25519_OPENSSL
+#ifdef VALVE_CRYPTO_25519_OPENSSL
 
 #include <openssl/evp.h>
 
@@ -71,12 +71,14 @@ uint32 CEC25519KeyBase::GetRawData( void *pData ) const
 
 void CEC25519KeyBase::Wipe()
 {
-	// We should never be using the raw buffer
-	Assert( CCryptoKeyBase_RawBuffer::m_pData == nullptr );
-	Assert( CCryptoKeyBase_RawBuffer::m_cbData == 0 );
+	if ( m_evp_pkey )
+	{
+		EVP_PKEY_free( (EVP_PKEY*)m_evp_pkey );
+		m_evp_pkey = nullptr;
+	}
 
-	EVP_PKEY_free( (EVP_PKEY*)m_evp_pkey );
-	m_evp_pkey = nullptr;
+	// Wipe raw buffer if we kept a separate copy
+	CCryptoKeyBase_RawBuffer::Wipe();
 }
 
 bool CEC25519KeyBase::SetRawData( const void *pData, size_t cbData )
@@ -204,5 +206,4 @@ bool CEC25519PrivateKeyBase::CachePublicKey()
 	return true;
 }
 
-#endif // #ifdef GNS_CRYPTO_25519_OPENSSL
-
+#endif // #ifdef VALVE_CRYPTO_25519_OPENSSL

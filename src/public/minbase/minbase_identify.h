@@ -48,10 +48,6 @@
 	#endif
 #endif
 
-#if ( defined(LINUX) || defined(OSX) || defined(ANDROID) ) && !defined(POSIX)
-	#define POSIX
-#endif
-
 #if defined(_WIN32) && !defined(WINDED)
 	#if defined(_M_IX86)
 		#define __i386__	1
@@ -110,6 +106,10 @@
 	#define IsRetail() false
 #endif
 
+#ifdef IsPosix
+	#error "Too soon"
+#endif
+
 #ifdef _DEBUG
 	#define IsRelease() false
 	#define IsDebug() true
@@ -118,32 +118,53 @@
 	#define IsDebug() false
 #endif
 
-#if defined( _XBOX_ONE )
+#if defined( _XBOX_ONE ) || defined( _GAMING_XBOX_XBOXONE )
 	#define IsXboxOne() true
 	#define IsConsole() true
+#elif defined( _GAMING_XBOX_SCARLETT )
+	#define IsXboxScarlett() true
+	#define IsConsole() true
 #elif defined( NN_NINTENDO_SDK )
-	#if !defined(POSIX) && !defined(_WIN32)
-		#define POSIX
+	#ifndef _WIN32
+		#define IsPosix() true
 	#endif
 	#define IsNintendoSwitch() true
+	#define IsConsole() true
+#elif defined( __PROSPERO__ )
+	#define IsPosix() true
+	#define IsPS5() true
+	#define IsConsole() true
+#elif defined( __ORBIS__ )
+	#define IsPosix() true
+	#define IsPS4() true
 	#define IsConsole() true
 #elif defined( _WIN32 )
 	#define IsWindows() true
 	#define IsPC() true
-#elif defined( _PS3 )
-	#define IsConsole() true
+#elif defined( __ANDROID__ ) || defined( ANDROID )
+	#define IsAndroid() true
 	#define IsPosix() true
-	#define IsPS3() true
-#elif defined(POSIX)
-	#define IsPC() true
-	#define IsPosix() true
-	#ifdef LINUX
-		#define IsLinux() true
-	#endif
-	#ifdef OSX
+#elif defined(__APPLE__)
+	#include <TargetConditionals.h>
+	#if defined( TARGET_OS_MAC )
 		#define SUPPORTS_IOPOLLINGHELPER
 		#define IsOSX() true
+		#define IsPosix() true
+	#elif defined( TARGET_OS_IPHONE )
+		#define IsIOS() true
+		#define IsPosix() true
+	#elif defined( TARGET_OS_TV )
+		#define IsTVOS() true
+		#define IsPosix() true
+	#else
+		#error "Unsupported platform"
 	#endif
+#elif defined( LINUX ) || defined( __LINUX__ ) || defined(linux) || defined(__linux) || defined(__linux__)
+	#define IsLinux() true
+	#define IsPosix() true
+#elif defined( _POSIX_VERSION ) || defined( POSIX ) || defined( VALVE_POSIX )
+	#define IsPosix() true
+	#define IsPC() true
 #else
 	#error Undefined platform
 #endif
@@ -154,6 +175,9 @@
 #ifndef IsPC
 	#define IsPC() false
 #endif
+#ifndef IsAndroid
+	#define IsAndroid() false
+#endif
 #ifndef IsConsole
 	#define IsConsole() false
 #endif
@@ -162,6 +186,32 @@
 #endif
 #ifndef IsXboxOne
 	#define IsXboxOne() false
+#endif
+#ifndef IsXboxScarlett
+	#define IsXboxScarlett() false
+#endif
+#define IsXbox() ( IsXboxOne() || IsXboxScarlett() )
+#if defined( _GAMING_XBOX ) && !IsXbox()
+	#error "_GAMING_XBOX_XBOXONE or _GAMING_XBOX_SCARLETT should be defined"
+#endif
+#ifndef IsPS4
+	#define IsPS4() false
+#endif
+#ifndef IsPS5
+	#define IsPS5() false
+#endif
+#define IsPlaystation() ( IsPS4() || IsPS5() )
+#ifndef IsIOS
+	#define IsIOS() false
+	#if defined(IOS) || defined(__IOS__)
+		#error "TVOS detection not working"
+	#endif
+#endif
+#ifndef IsTVOS
+	#define IsTVOS() false
+	#if defined(TVOS) || defined(__TVOS__)
+		#error "TVOS detection not working"
+	#endif
 #endif
 #ifndef IsLinux
 	#define IsLinux() false
@@ -172,12 +222,6 @@
 #ifndef IsOSX
 	#define IsOSX() false
 #endif
-#ifndef IsPS3
-	#define IsPS3() false
-#endif
-#ifndef IsX360
-	#define IsX360() false
-#endif
 #ifndef IsARM
 	#ifdef __arm__
 		#define IsARM() true
@@ -185,13 +229,33 @@
 		#define IsARM() false
 	#endif
 #endif
-#ifndef IsAndroid
-	#ifdef ANDROID
-		#define IsAndroid() true
-	#else
-		#define IsAndroid() false
-	#endif
+
+// Detect if RTTI is enabled in the current compile
+#if defined(__clang__)
+  #if __has_feature(cxx_rtti)
+    #define RTTIEnabled() true
+  #endif
+#elif defined(__GNUC__)
+  #if defined(__GXX_RTTI)
+    #define RTTIEnabled() true
+  #endif
+#elif defined(_MSC_VER)
+  #if defined(_CPPRTTI)
+    #define RTTIEnabled() true
+  #endif
+#else
+  #error "How to tell if RTTI is enabled?")
+#endif
+#ifndef RTTIEnabled
+	#define RTTIEnabled() false
 #endif
 
+// SDR_PUBLIC wrap tier0 and tier1 symbols in a namespace to limit
+// the possibility of clashing when statically linking.  (Especially
+// with games that use the source engine!)
+#define BEGIN_TIER0_NAMESPACE namespace SteamNetworkingSocketsTier0 {
+#define END_TIER0_NAMESPACE } using namespace SteamNetworkingSocketsTier0;
+#define BEGIN_TIER1_NAMESPACE namespace SteamNetworkingSocketsTier1 {
+#define END_TIER1_NAMESPACE } using namespace SteamNetworkingSocketsTier1;
 
 #endif // #ifndef MINBASE_IDENTIFY_H

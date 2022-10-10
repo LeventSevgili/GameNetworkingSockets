@@ -25,6 +25,7 @@ namespace SteamNetworkingSocketsLib {
 
 class CSteamNetworkingUtils;
 class CSteamNetworkListenSocketP2P;
+class CMessagesEndPoint;
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -95,10 +96,11 @@ public:
 	virtual EResult FlushMessagesOnConnection( HSteamNetConnection hConn ) override;
 	virtual int ReceiveMessagesOnConnection( HSteamNetConnection hConn, SteamNetworkingMessage_t **ppOutMessages, int nMaxMessages ) override;
 	virtual bool GetConnectionInfo( HSteamNetConnection hConn, SteamNetConnectionInfo_t *pInfo ) override;
-	virtual bool GetQuickConnectionStatus( HSteamNetConnection hConn, SteamNetworkingQuickConnectionStatus *pStats ) override;
+	virtual EResult GetConnectionRealTimeStatus( HSteamNetConnection hConn, SteamNetConnectionRealTimeStatus_t *pStatus, int nLanes, SteamNetConnectionRealTimeLaneStatus_t *pLanes ) override;
 	virtual int GetDetailedConnectionStatus( HSteamNetConnection hConn, char *pszBuf, int cbBuf ) override;
 	virtual bool GetListenSocketAddress( HSteamListenSocket hSocket, SteamNetworkingIPAddr *pAddress ) override;
 	virtual bool CreateSocketPair( HSteamNetConnection *pOutConnection1, HSteamNetConnection *pOutConnection2, bool bUseNetworkLoopback, const SteamNetworkingIdentity *pIdentity1, const SteamNetworkingIdentity *pIdentity2 ) override;
+	virtual EResult ConfigureConnectionLanes( HSteamNetConnection hConn, int nNumLanes, const int *pLanePriorities, const uint16 *pLaneWeights ) override;
 	virtual bool GetIdentity( SteamNetworkingIdentity *pIdentity ) override;
 
 	virtual HSteamNetPollGroup CreatePollGroup() override;
@@ -110,16 +112,20 @@ public:
 	virtual int GetP2P_Transport_ICE_Enable( const SteamNetworkingIdentity &identityRemote, int *pOutUserFlags );
 
 	virtual bool GetCertificateRequest( int *pcbBlob, void *pBlob, SteamNetworkingErrMsg &errMsg ) override;
-	virtual bool SetCertificate( const void *pCertificate, int cbCertificate, SteamNetworkingErrMsg &errMsg ) override;
+	virtual bool SetCertificate( const void *pCertificate, int cbCertificate, SteamNetworkingErrMsg &errMsg ) override final; // Final.  Override InternalSetCertificate to customize
 	virtual void ResetIdentity( const SteamNetworkingIdentity *pIdentity ) override;
 
-	virtual bool BeginAsyncRequestFakeIP( int nNumPorts ) override;
-	virtual void GetFakeIP( int idxFirstPort, SteamNetworkingFakeIPResult_t *pInfo ) override;
 	virtual HSteamListenSocket CreateListenSocketP2PFakeIP( int idxFakePort, int nOptions, const SteamNetworkingConfigValue_t *pOptions ) override;
 	virtual EResult GetRemoteFakeIPForConnection( HSteamNetConnection hConn, SteamNetworkingIPAddr *pOutAddr ) override;
 
 	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_FAKEIP
+	int m_nFakeIPPortsRequested = 0;
 	virtual int GetFakePortIndex( const SteamNetworkingIPAddr &fakeIP ) = 0;
+	#else
+	static constexpr int m_nFakeIPPortsRequested = 0;
+	virtual bool BeginAsyncRequestFakeIP( int nNumPorts ) override;
+	virtual void GetFakeIP( int idxFirstPort, SteamNetworkingFakeIPResult_t *pInfo ) override;
+	ISteamNetworkingFakeUDPPort *CreateFakeUDPPort( int idxFakeServerPort ) override;
 	#endif
 
 #ifdef STEAMNETWORKINGSOCKETS_STEAMCLIENT
@@ -151,6 +157,11 @@ public:
 	//
 
 #ifdef STEAMNETWORKINGSOCKETS_CAN_REQUEST_CERT
+	// Return true if we're running in a mode where we actually
+	// can request certs
+	virtual bool BCanRequestCert() { return true; }
+
+	// Check if a cert request is already in progress
 	virtual bool BCertRequestInFlight() = 0;
 
 	ScheduledMethodThinker<CSteamNetworkingSockets> m_scheduleCheckRenewCert;
@@ -158,6 +169,7 @@ public:
 	/// Platform-specific code to actually obtain a cert
 	virtual void BeginFetchCertAsync() = 0;
 #else
+	inline bool BCanRequestCert() { return false; }
 	inline bool BCertRequestInFlight() { return false; }
 #endif
 
@@ -181,8 +193,12 @@ public:
 		int nOptions, const SteamNetworkingConfigValue_t *pOptions,
 		ConnectionScopeLock &scopeLock
 	);
+
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_STEAMNETWORKINGMESSAGES
 	CSteamNetworkingMessages *GetSteamNetworkingMessages();
 	CSteamNetworkingMessages *m_pSteamNetworkingMessages;
+	CUtlHashMap<int,CMessagesEndPoint *,std::equal_to<int>,std::hash<int>> m_mapMessagesEndpointByVirtualPort;
+#endif
 
 // Stubs if SDR not enabled
 #ifndef STEAMNETWORKINGSOCKETS_ENABLE_SDR
@@ -223,7 +239,20 @@ protected:
 	/// Figure out the current authentication status.  And if it has changed, send out callbacks
 	virtual void DeduceAuthenticationStatus();
 
-	void InternalInitIdentity();
+	// Flags that specify what actions to take wrt to any durable cache, when we are assigned an identity or certificate.
+	static constexpr int k_nIdentitySetFlag_NoLoadCert = (1<<0);
+	static constexpr int k_nIdentitySetFlag_NoLoadTickets = (1<<1);
+	static constexpr int k_nIdentitySetFlag_NoLoad = k_nIdentitySetFlag_NoLoadCert | k_nIdentitySetFlag_NoLoadTickets;
+	static constexpr int k_nIdentitySetFlag_NoSave = (1<<2);
+	static constexpr int k_nIdentitySetFlag_NoCacheAccess = -1;
+
+	/// Called when we get a valid identity
+	virtual void InternalOnGotIdentity( int nIdentitySetFlags );
+
+	/// Set certificate and/or private key
+	virtual bool InternalSetCertificate( const void *pCertificate, int cbCertificate, SteamNetworkingErrMsg &errMsg, int nIdentitySetFlags );
+
+	virtual void InternalClearIdentity();
 	void KillConnections();
 
 	SteamNetworkingIdentity m_identity;
@@ -257,6 +286,7 @@ class CSteamNetworkingUtils : public IClientNetworkingUtils
 {
 public:
 	STEAMNETWORKINGSOCKETS_DECLARE_CLASS_OPERATOR_NEW
+	CSteamNetworkingUtils();
 	virtual ~CSteamNetworkingUtils();
 
 	virtual SteamNetworkingMessage_t *AllocateMessage( int cbAllocateBuffer ) override;

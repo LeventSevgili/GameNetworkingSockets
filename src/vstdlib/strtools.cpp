@@ -8,7 +8,7 @@
 #include "winlite.h"
 #endif
 
-#ifdef POSIX
+#if IsPosix()
 	#include <unistd.h>
 #endif
 
@@ -21,7 +21,7 @@
 #define PATHSEPARATOR(c) ('/' == (c))
 #endif	//_WIN32
 
-
+BEGIN_TIER0_NAMESPACE
 
 static char* AllocString( const char *pStr, int nMaxChars )
 {
@@ -402,7 +402,7 @@ void V_SplitString2( const char *pString, const char * const *pSeparators, int n
 			{
 				outStrings.AddToTail( AllocString( pCurPos, -1 ) );
 			}
-			else if (bIncludeEmptyStrings)
+			else if (bIncludeEmptyStrings && pCurPos > pString)
 			{
 				outStrings.AddToTail( AllocString( "" , 1 ));
 			}
@@ -480,3 +480,5 @@ int V_StrTrim( char *pStr )
 
 	return pDest - pStart;
 }
+
+END_TIER0_NAMESPACE

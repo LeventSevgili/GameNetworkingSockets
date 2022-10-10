@@ -1,10 +1,7 @@
-cmake_minimum_required(VERSION 3.9)
-project(gns_example C CXX)
-
 #
 # Trivial signaling server, written in go
 #
-if( NOT WIN32 AND USE_STEAMWEBRTC )
+if( ENABLE_ICE AND ( BUILD_EXAMPLES OR BUILD_TESTS ) )
 	find_program( GO go )
 	if ( NOT GO )
 		message(WARNING "Could not find 'go' binary, will not build signaling server example program")
@@ -27,24 +24,20 @@ if( NOT WIN32 AND USE_STEAMWEBRTC )
 endif()
 
 #
-# Really simple client/server chat
+# Examples
 #
+if( BUILD_EXAMPLES )
 
-add_executable(
-	example_chat
-	example_chat.cpp)
+	#
+	# Really simple client/server chat
+	#
 
-if(COMMAND set_target_common_gns_properties)
-	set_target_common_gns_properties( example_chat )
-endif()
+	add_executable(
+		example_chat
+		example_chat.cpp)
 
-# If building the example as a standalone project, need to find GameNetworkingSockets
-if(${CMAKE_PROJECT_NAME} STREQUAL "gns_example")
-	find_package(GameNetworkingSockets CONFIG REQUIRED)
-endif()
+	target_link_libraries(example_chat GameNetworkingSockets::shared)
 
-target_link_libraries(example_chat GameNetworkingSockets::GameNetworkingSockets)
-
-if(COMMAND add_sanitizers)
 	add_sanitizers(example_chat)
+
 endif()

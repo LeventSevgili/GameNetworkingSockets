@@ -83,6 +83,9 @@ public:
 	bool operator==( const CCryptoKeyBase &rhs ) const;
 	bool operator!=( const CCryptoKeyBase &rhs ) const { return !operator==( rhs ); }
 
+	// Return true if our raw data matches the specified buffer.
+	bool BMatchesRawData( const void *pData, size_t cbData ) const;
+
 	// Make a copy of the key, by using the raw data functions
 	void CopyFrom( const CCryptoKeyBase &x );
 
@@ -117,8 +120,16 @@ public:
 	virtual uint32 GetRawData( void *pData ) const override;
 	virtual void Wipe() override;
 
+	// Access the raw data.  This might not be available, depending on the crypto
+	// implementation!  Avoid using this except for very specialized situations.
+	// Instead, prefer the base class functions such as GetRawData, BMatchesRawData, etc
 	const uint8 *GetRawDataPtr() const { return m_pData; }
 	uint32 GetRawDataSize() const { return m_cbData; }
+
+	// Make sure that we can call GetRawDataPtr(), perhaps making a copy
+	// of the key from the crypto provider into our local buffer if necessary.
+	// Returns false if the key is invalid or we fail to alloc memory.
+	bool EnsureRawDataPtrAvailable();
 
 #ifdef DBGFLAG_VALIDATE
 	virtual void Validate( CValidator &validator, const char *pchName ) const;		// Validate our internal structures
@@ -126,6 +137,8 @@ public:
 
 protected:
 	virtual bool SetRawData( const void *pData, size_t cbData ) override;
+	void InternalWipeRawDataBuffer();
+	bool InternalSetRawDataBuffer( const void *pData, size_t cbData );
 	inline CCryptoKeyBase_RawBuffer( ECryptoKeyType keyType ) : CCryptoKeyBase( keyType ), m_pData( nullptr ), m_cbData( 0 ) {}
 
 	uint8 *m_pData;
