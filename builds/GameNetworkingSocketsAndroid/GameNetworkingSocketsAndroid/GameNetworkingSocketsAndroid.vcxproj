@@ -102,6 +102,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
   </PropertyGroup>
@@ -148,24 +149,22 @@
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\..\include;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\public;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil;C:\Users\loren\Desktop\Source\gns\build\sdk\protobuf-armv8\include;C:\Users\loren\Desktop\Source\gns\build\sdk\OpenSSL-armv8\include;C:\sdk\protobuf-amd64\include;C:\Program Files\OpenSSL-Win64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>WEBRTC_POSIX;POSIX;WEBRTC_ANDROID;ANDROID;NDEBUG;GOOGLE_PROTOBUF_NO_RTTI;PROTOBUF_USE_DLLS;STEAMNETWORKINGSOCKETS_ENABLE_ICE;STEAMWEBRTC_USE_STATIC_LIBS;STEAMNETWORKINGSOCKETS_FOREXPORT;ENABLE_OPENSSLCONNECTION;CRYPTO_DISABLE_ENCRYPT_WITH_PASSWORD;STEAMNETWORKINGSOCKETS_CRYPTO_VALVEOPENSSL;STEAMNETWORKINGSOCKETS_CRYPTO_25519_OPENSSL;VALVE_CRYPTO_ENABLE_25519;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;__CLANG_SUPPORT_DYN_ANNOTATION__;CMAKE_INTDIR="Release";GameNetworkingSockets_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\..\include;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\public;C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src;C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\external\abseil;C:\OpenSSL-Win64\include;C:\Users\loren\Desktop\Source\GameNetworkingSockets\vcpkg_installed\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>STEAMNETWORKINGSOCKETS_ENABLE_WEBRTC;WEBRTC_POSIX;POSIX;WEBRTC_ANDROID;ANDROID;NDEBUG;GOOGLE_PROTOBUF_NO_RTTI;PROTOBUF_USE_DLLS;STEAMNETWORKINGSOCKETS_ENABLE_ICE;STEAMWEBRTC_USE_STATIC_LIBS;STEAMNETWORKINGSOCKETS_FOREXPORT;ENABLE_OPENSSLCONNECTION;CRYPTO_DISABLE_ENCRYPT_WITH_PASSWORD;STEAMNETWORKINGSOCKETS_CRYPTO_VALVEOPENSSL;VALVE_CRYPTO_25519_OPENSSL;VALVE_CRYPTO_ENABLE_25519;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;__CLANG_SUPPORT_DYN_ANNOTATION__;CMAKE_INTDIR="Release";GameNetworkingSockets_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <CppLanguageStandard>c++11</CppLanguageStandard>
       <ExceptionHandling>Enabled</ExceptionHandling>
       <DebugInformationFormat>None</DebugInformationFormat>
     </ClCompile>
     <Link>
       <LibraryDependencies>webrtc_lite;Abseil;abseil_strings;ssl;crypto;protobuf;%(LibraryDependencies)</LibraryDependencies>
-      <AdditionalLibraryDirectories>$(SolutionDir)$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)$(Platform)\$(Configuration)\;C:\Users\loren\Desktop\Source\GameNetworkingSockets\builds\GameNetworkingSocketsAndroid\ThirdParty\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <VerboseOutput>false</VerboseOutput>
       <AdditionalOptions>-lm -v %(AdditionalOptions)</AdditionalOptions>
       <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <SharedLibrarySearchPath>%(SharedLibrarySearchPath)</SharedLibrarySearchPath>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy $(SolutionDir)\$(Platform)\$(Configuration)\*.a C:\Users\loren\Desktop\Source\turbo\sdk\GNS\Android\$(Platform) /Y
-xcopy $(SolutionDir)\$(Platform)\$(Configuration)\*.so C:\Users\loren\Desktop\Source\turbo\sdk\GNS\Android\$(Platform) /Y
-xcopy $(SolutionDir)..\..\include\steam\*.* C:\Users\loren\Desktop\Source\turbo\sdk\GNS\include\steam /Y
-
+      <Command>xcopy C:\Users\loren\Desktop\Source\GameNetworkingSockets\builds\GameNetworkingSocketsAndroid\ThirdParty\*.*  $(SolutionDir)\$(Platform)\$(Configuration)
 cd  $(SolutionDir)\$(Platform)\$(Configuration)
 start .</Command>
     </PostBuildEvent>
@@ -202,6 +201,11 @@ start .</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\common\crypto.cpp" />
+    <ClCompile Include="..\..\..\src\common\steamnetworkingsockets_messages.pb.cc" />
+    <ClCompile Include="..\..\..\src\common\steamnetworkingsockets_messages_certs.pb.cc" />
+    <ClCompile Include="..\..\..\src\common\steamnetworkingsockets_messages_udp.pb.cc" />
+    <ClCompile Include="..\..\..\src\steamnetworkingsockets\clientlib\steamnetworkingsockets_p2p_webrtc.cpp" />
+    <ClCompile Include="..\..\..\src\steamnetworkingsockets\clientlib\steamnetworkingsockets_stun.cpp" />
     <ClCompile Include="GameNetworkingSocketsAndroid.cpp" />
     <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\crypto_textencode.cpp" />
     <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\keypair.cpp" />
@@ -230,9 +234,6 @@ start .</Command>
     <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\crypto_openssl.cpp" />
     <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\opensslwrapper.cpp" />
     <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\crypto_25519_openssl.cpp" />
-    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\steamnetworkingsockets_messages_certs.pb.cc" />
-    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\steamnetworkingsockets_messages.pb.cc" />
-    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\steamnetworkingsockets_messages_udp.pb.cc" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GameNetworkingSocketsAndroid.h" />

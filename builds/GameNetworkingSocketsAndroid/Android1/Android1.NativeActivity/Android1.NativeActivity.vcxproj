@@ -142,7 +142,7 @@
     </ClCompile>
     <Link>
       <LibraryDependencies>%(LibraryDependencies);GLESv1_CM;EGL;GameNetworkingSocketsAndroid;webrtc_lite;Abseil;abseil_strings;ssl;crypto;protobuf</LibraryDependencies>
-      <AdditionalLibraryDirectories>C:\Users\loren\Desktop\Source\GameNetworkingSockets\build\GameNetworkingSocketsAndroid\ARM64\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\loren\Desktop\Source\GameNetworkingSockets\builds\GameNetworkingSocketsAndroid\ARM64\Release;C:\Users\loren\Desktop\Source\GameNetworkingSockets\builds\GameNetworkingSocketsAndroid\ThirdParty;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <VerboseOutput>false</VerboseOutput>
       <AdditionalOptions>-lm %(AdditionalOptions)</AdditionalOptions>
     </Link>

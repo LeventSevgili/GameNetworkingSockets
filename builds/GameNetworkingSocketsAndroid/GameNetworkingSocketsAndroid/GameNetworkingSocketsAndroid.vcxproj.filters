@@ -29,10 +29,12 @@
     <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\crypto_openssl.cpp" />
     <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\opensslwrapper.cpp" />
     <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\src\common\crypto_25519_openssl.cpp" />
-    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\steamnetworkingsockets_messages_certs.pb.cc" />
-    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\steamnetworkingsockets_messages.pb.cc" />
-    <ClCompile Include="C:\Users\loren\Desktop\Source\GameNetworkingSockets\bin\src\steamnetworkingsockets_messages_udp.pb.cc" />
     <ClCompile Include="..\..\..\src\common\crypto.cpp" />
+    <ClCompile Include="..\..\..\src\common\steamnetworkingsockets_messages.pb.cc" />
+    <ClCompile Include="..\..\..\src\common\steamnetworkingsockets_messages_certs.pb.cc" />
+    <ClCompile Include="..\..\..\src\common\steamnetworkingsockets_messages_udp.pb.cc" />
+    <ClCompile Include="..\..\..\src\steamnetworkingsockets\clientlib\steamnetworkingsockets_stun.cpp" />
+    <ClCompile Include="..\..\..\src\steamnetworkingsockets\clientlib\steamnetworkingsockets_p2p_webrtc.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GameNetworkingSocketsAndroid.h" />
