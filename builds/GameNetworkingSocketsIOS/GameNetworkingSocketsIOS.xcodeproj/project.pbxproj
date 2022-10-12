@@ -7,15 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7F0AEB03254F462D00FB50E7 /* libssl.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7F0AEB01254F462D00FB50E7 /* libssl.a */; platformFilter = ios; };
 		7F0AEB04254F462D00FB50E7 /* libcrypto.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7F0AEB02254F462D00FB50E7 /* libcrypto.a */; platformFilter = ios; };
-		7F0AEB06254F463C00FB50E7 /* libprotobuf.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7F0AEB05254F463B00FB50E7 /* libprotobuf.a */; platformFilter = ios; };
 		7F16A1D225CA645100095593 /* crypto.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7F16A1D125CA645100095593 /* crypto.cpp */; };
-		7F2B792D2617B5730071F679 /* libsteamwebrtc.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7F0AEB07254F464A00FB50E7 /* libsteamwebrtc.a */; };
-		7F2B792E2617B57B0071F679 /* libwebrtc-lite.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7F0AEAFD254F460600FB50E7 /* libwebrtc-lite.a */; };
 		7F2B792F2617B5820071F679 /* libabseil.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7F0AEAFF254F461400FB50E7 /* libabseil.a */; };
 		7F4B33132549E4B100896BF8 /* GameNetworkingSocketsIOS.m in Sources */ = {isa = PBXBuildFile; fileRef = 7F4B33122549E4B100896BF8 /* GameNetworkingSocketsIOS.m */; };
-		7F4B33142549E4B100896BF8 /* GameNetworkingSocketsIOS.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 7F4B33112549E4B100896BF8 /* GameNetworkingSocketsIOS.h */; };
+		7F4B33142549E4B100896BF8 /* GameNetworkingSocketsIOS.h in Copy Files */ = {isa = PBXBuildFile; fileRef = 7F4B33112549E4B100896BF8 /* GameNetworkingSocketsIOS.h */; };
 		7F4B331E2549E75800896BF8 /* crypto_25519_openssl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7F4B331D2549E75800896BF8 /* crypto_25519_openssl.cpp */; };
 		7F4B33202549E77400896BF8 /* crypto_openssl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7F4B331F2549E77400896BF8 /* crypto_openssl.cpp */; };
 		7F4B33222549E77F00896BF8 /* crypto_textencode.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7F4B33212549E77F00896BF8 /* crypto_textencode.cpp */; };
@@ -41,33 +37,36 @@
 		7F4B334C2549E89E00896BF8 /* steamnetworkingsockets_p2p.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7F4B33482549E89E00896BF8 /* steamnetworkingsockets_p2p.cpp */; };
 		7F4B334D2549E89F00896BF8 /* steamnetworkingsockets_udp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7F4B33492549E89E00896BF8 /* steamnetworkingsockets_udp.cpp */; };
 		7F4B334E2549E89F00896BF8 /* steamnetworkingsockets_p2p_ice.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7F4B334A2549E89E00896BF8 /* steamnetworkingsockets_p2p_ice.cpp */; };
-		7F4B33522549E94A00896BF8 /* steamnetworkingsockets_messages_certs.pb.cc in Sources */ = {isa = PBXBuildFile; fileRef = 7F4B334F2549E94A00896BF8 /* steamnetworkingsockets_messages_certs.pb.cc */; };
-		7F4B33532549E94A00896BF8 /* steamnetworkingsockets_messages.pb.cc in Sources */ = {isa = PBXBuildFile; fileRef = 7F4B33502549E94A00896BF8 /* steamnetworkingsockets_messages.pb.cc */; };
-		7F4B33542549E94A00896BF8 /* steamnetworkingsockets_messages_udp.pb.cc in Sources */ = {isa = PBXBuildFile; fileRef = 7F4B33512549E94A00896BF8 /* steamnetworkingsockets_messages_udp.pb.cc */; };
 		7F4B33562549E98C00896BF8 /* strtools.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7F4B33552549E98C00896BF8 /* strtools.cpp */; };
+		7F6C8D8328F5744300D0334E /* steamnetworkingsockets_stun.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7F6C8D8128F5744300D0334E /* steamnetworkingsockets_stun.cpp */; };
+		7F6C8D8428F5744300D0334E /* steamnetworkingsockets_p2p_webrtc.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7F6C8D8228F5744300D0334E /* steamnetworkingsockets_p2p_webrtc.cpp */; };
 		7FAFA6AB25CA7871007423AF /* csteamnetworkingmessages.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7FAFA6AA25CA7871007423AF /* csteamnetworkingmessages.cpp */; };
+		7FBCEE5528F5EA7800408AD3 /* steamnetworkingsockets_messages.pb.cc in Sources */ = {isa = PBXBuildFile; fileRef = 7FBCEE5228F5EA7800408AD3 /* steamnetworkingsockets_messages.pb.cc */; };
+		7FBCEE5628F5EA7800408AD3 /* steamnetworkingsockets_messages_udp.pb.cc in Sources */ = {isa = PBXBuildFile; fileRef = 7FBCEE5328F5EA7800408AD3 /* steamnetworkingsockets_messages_udp.pb.cc */; };
+		7FBCEE5728F5EA7900408AD3 /* steamnetworkingsockets_messages_certs.pb.cc in Sources */ = {isa = PBXBuildFile; fileRef = 7FBCEE5428F5EA7800408AD3 /* steamnetworkingsockets_messages_certs.pb.cc */; };
+		7FBCEE5B28F6094900408AD3 /* libsteamwebrtc.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7FBCEE5A28F6094900408AD3 /* libsteamwebrtc.a */; };
+		7FBCEE5F28F60B1F00408AD3 /* libwebrtc-lite.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7FBCEE5E28F60B1F00408AD3 /* libwebrtc-lite.a */; };
+		7FBCEE6128F60B5D00408AD3 /* libssl.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7FBCEE6028F60B5D00408AD3 /* libssl.a */; };
+		7FBCEE6528F6B7FA00408AD3 /* libprotobuf.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7FBCEE6428F6B7FA00408AD3 /* libprotobuf.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		7F4B330C2549E4B100896BF8 /* CopyFiles */ = {
+		7F4B330C2549E4B100896BF8 /* Copy Files */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "include/$(PRODUCT_NAME)";
 			dstSubfolderSpec = 16;
 			files = (
-				7F4B33142549E4B100896BF8 /* GameNetworkingSocketsIOS.h in CopyFiles */,
+				7F4B33142549E4B100896BF8 /* GameNetworkingSocketsIOS.h in Copy Files */,
 			);
+			name = "Copy Files";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		7F0AEAFD254F460600FB50E7 /* libwebrtc-lite.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libwebrtc-lite.a"; path = "../bin/webrtc-lite/Release-iphoneos/libwebrtc-lite.a"; sourceTree = "<group>"; };
 		7F0AEAFF254F461400FB50E7 /* libabseil.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libabseil.a; path = "../bin/abseil/Release-iphoneos/libabseil.a"; sourceTree = "<group>"; };
-		7F0AEB01254F462D00FB50E7 /* libssl.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libssl.a; path = ../bin/OpenSSL/libssl.a; sourceTree = "<group>"; };
 		7F0AEB02254F462D00FB50E7 /* libcrypto.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libcrypto.a; path = ../bin/OpenSSL/libcrypto.a; sourceTree = "<group>"; };
-		7F0AEB05254F463B00FB50E7 /* libprotobuf.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libprotobuf.a; path = ../bin/protobuf/libprotobuf.a; sourceTree = "<group>"; };
-		7F0AEB07254F464A00FB50E7 /* libsteamwebrtc.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libsteamwebrtc.a; path = "../bin/steamwebrtc/Release-iphoneos/libsteamwebrtc.a"; sourceTree = "<group>"; };
 		7F16A1D125CA645100095593 /* crypto.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = crypto.cpp; path = ../../../src/common/crypto.cpp; sourceTree = "<group>"; };
 		7F4B330E2549E4B100896BF8 /* libGameNetworkingSocketsIOS.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libGameNetworkingSocketsIOS.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		7F4B33112549E4B100896BF8 /* GameNetworkingSocketsIOS.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GameNetworkingSocketsIOS.h; sourceTree = "<group>"; };
@@ -97,11 +96,17 @@
 		7F4B33482549E89E00896BF8 /* steamnetworkingsockets_p2p.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = steamnetworkingsockets_p2p.cpp; path = ../../../src/steamnetworkingsockets/clientlib/steamnetworkingsockets_p2p.cpp; sourceTree = "<group>"; };
 		7F4B33492549E89E00896BF8 /* steamnetworkingsockets_udp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = steamnetworkingsockets_udp.cpp; path = ../../../src/steamnetworkingsockets/clientlib/steamnetworkingsockets_udp.cpp; sourceTree = "<group>"; };
 		7F4B334A2549E89E00896BF8 /* steamnetworkingsockets_p2p_ice.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = steamnetworkingsockets_p2p_ice.cpp; path = ../../../src/steamnetworkingsockets/clientlib/steamnetworkingsockets_p2p_ice.cpp; sourceTree = "<group>"; };
-		7F4B334F2549E94A00896BF8 /* steamnetworkingsockets_messages_certs.pb.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = steamnetworkingsockets_messages_certs.pb.cc; path = ../../../include/steamnetworkingsockets_messages_certs.pb.cc; sourceTree = "<group>"; };
-		7F4B33502549E94A00896BF8 /* steamnetworkingsockets_messages.pb.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = steamnetworkingsockets_messages.pb.cc; path = ../../../include/steamnetworkingsockets_messages.pb.cc; sourceTree = "<group>"; };
-		7F4B33512549E94A00896BF8 /* steamnetworkingsockets_messages_udp.pb.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = steamnetworkingsockets_messages_udp.pb.cc; path = ../../../include/steamnetworkingsockets_messages_udp.pb.cc; sourceTree = "<group>"; };
 		7F4B33552549E98C00896BF8 /* strtools.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = strtools.cpp; path = ../../../src/vstdlib/strtools.cpp; sourceTree = "<group>"; };
+		7F6C8D8128F5744300D0334E /* steamnetworkingsockets_stun.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = steamnetworkingsockets_stun.cpp; path = ../../../src/steamnetworkingsockets/clientlib/steamnetworkingsockets_stun.cpp; sourceTree = "<group>"; };
+		7F6C8D8228F5744300D0334E /* steamnetworkingsockets_p2p_webrtc.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = steamnetworkingsockets_p2p_webrtc.cpp; path = ../../../src/steamnetworkingsockets/clientlib/steamnetworkingsockets_p2p_webrtc.cpp; sourceTree = "<group>"; };
 		7FAFA6AA25CA7871007423AF /* csteamnetworkingmessages.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = csteamnetworkingmessages.cpp; path = ../../../src/steamnetworkingsockets/clientlib/csteamnetworkingmessages.cpp; sourceTree = "<group>"; };
+		7FBCEE5228F5EA7800408AD3 /* steamnetworkingsockets_messages.pb.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = steamnetworkingsockets_messages.pb.cc; path = ../../../src/common/steamnetworkingsockets_messages.pb.cc; sourceTree = "<group>"; };
+		7FBCEE5328F5EA7800408AD3 /* steamnetworkingsockets_messages_udp.pb.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = steamnetworkingsockets_messages_udp.pb.cc; path = ../../../src/common/steamnetworkingsockets_messages_udp.pb.cc; sourceTree = "<group>"; };
+		7FBCEE5428F5EA7800408AD3 /* steamnetworkingsockets_messages_certs.pb.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = steamnetworkingsockets_messages_certs.pb.cc; path = ../../../src/common/steamnetworkingsockets_messages_certs.pb.cc; sourceTree = "<group>"; };
+		7FBCEE5A28F6094900408AD3 /* libsteamwebrtc.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libsteamwebrtc.a; path = "../bin/steamwebrtc/Release-iphoneos/libsteamwebrtc.a"; sourceTree = "<group>"; };
+		7FBCEE5E28F60B1F00408AD3 /* libwebrtc-lite.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libwebrtc-lite.a"; path = "../bin/webrtc-lite/Release-iphoneos/libwebrtc-lite.a"; sourceTree = "<group>"; };
+		7FBCEE6028F60B5D00408AD3 /* libssl.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libssl.a; path = ../bin/OpenSSL/libssl.a; sourceTree = "<group>"; };
+		7FBCEE6428F6B7FA00408AD3 /* libprotobuf.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libprotobuf.a; path = ../bin/protobuf/libprotobuf.a; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -109,12 +114,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7F2B792E2617B57B0071F679 /* libwebrtc-lite.a in Frameworks */,
-				7F2B792F2617B5820071F679 /* libabseil.a in Frameworks */,
-				7F0AEB06254F463C00FB50E7 /* libprotobuf.a in Frameworks */,
-				7F0AEB03254F462D00FB50E7 /* libssl.a in Frameworks */,
-				7F2B792D2617B5730071F679 /* libsteamwebrtc.a in Frameworks */,
+				7FBCEE5F28F60B1F00408AD3 /* libwebrtc-lite.a in Frameworks */,
+				7FBCEE5B28F6094900408AD3 /* libsteamwebrtc.a in Frameworks */,
+				7FBCEE6128F60B5D00408AD3 /* libssl.a in Frameworks */,
 				7F0AEB04254F462D00FB50E7 /* libcrypto.a in Frameworks */,
+				7FBCEE6528F6B7FA00408AD3 /* libprotobuf.a in Frameworks */,
+				7F2B792F2617B5820071F679 /* libabseil.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -154,11 +159,9 @@
 				7F4B33332549E82600896BF8 /* steamid.cpp */,
 				7F4B332B2549E7F100896BF8 /* netadr.cpp */,
 				7F4B33352549E83800896BF8 /* platformtime.cpp */,
-				7F4B334F2549E94A00896BF8 /* steamnetworkingsockets_messages_certs.pb.cc */,
-				7F4B33512549E94A00896BF8 /* steamnetworkingsockets_messages_udp.pb.cc */,
-				7F4B33502549E94A00896BF8 /* steamnetworkingsockets_messages.pb.cc */,
 				7F4B334A2549E89E00896BF8 /* steamnetworkingsockets_p2p_ice.cpp */,
 				7F4B33482549E89E00896BF8 /* steamnetworkingsockets_p2p.cpp */,
+				7F6C8D8228F5744300D0334E /* steamnetworkingsockets_p2p_webrtc.cpp */,
 				7F4B33472549E89E00896BF8 /* steamnetworkingsockets_snp.cpp */,
 				7F4B33492549E89E00896BF8 /* steamnetworkingsockets_udp.cpp */,
 				7F4B33432549E88700896BF8 /* steamnetworkingsockets_connections.cpp */,
@@ -166,8 +169,12 @@
 				7F4B33422549E88600896BF8 /* steamnetworkingsockets_lowlevel.cpp */,
 				7F4B33372549E86200896BF8 /* steamnetworkingsockets_certs.cpp */,
 				7F4B33392549E86300896BF8 /* steamnetworkingsockets_certstore.cpp */,
+				7FBCEE5428F5EA7800408AD3 /* steamnetworkingsockets_messages_certs.pb.cc */,
+				7FBCEE5328F5EA7800408AD3 /* steamnetworkingsockets_messages_udp.pb.cc */,
+				7FBCEE5228F5EA7800408AD3 /* steamnetworkingsockets_messages.pb.cc */,
 				7F4B33382549E86300896BF8 /* steamnetworkingsockets_shared.cpp */,
 				7F4B333B2549E86300896BF8 /* steamnetworkingsockets_stats.cpp */,
+				7F6C8D8128F5744300D0334E /* steamnetworkingsockets_stun.cpp */,
 				7F4B333A2549E86300896BF8 /* steamnetworkingsockets_thinker.cpp */,
 				7F4B33552549E98C00896BF8 /* strtools.cpp */,
 				7F4B332D2549E7F700896BF8 /* utlbuffer.cpp */,
@@ -181,12 +188,12 @@
 		7F4B33572549F20400896BF8 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				7F0AEB07254F464A00FB50E7 /* libsteamwebrtc.a */,
-				7F0AEB05254F463B00FB50E7 /* libprotobuf.a */,
+				7FBCEE6428F6B7FA00408AD3 /* libprotobuf.a */,
+				7FBCEE5E28F60B1F00408AD3 /* libwebrtc-lite.a */,
+				7FBCEE5A28F6094900408AD3 /* libsteamwebrtc.a */,
+				7FBCEE6028F60B5D00408AD3 /* libssl.a */,
 				7F0AEB02254F462D00FB50E7 /* libcrypto.a */,
-				7F0AEB01254F462D00FB50E7 /* libssl.a */,
 				7F0AEAFF254F461400FB50E7 /* libabseil.a */,
-				7F0AEAFD254F460600FB50E7 /* libwebrtc-lite.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -200,7 +207,7 @@
 			buildPhases = (
 				7F4B330A2549E4B100896BF8 /* Sources */,
 				7F4B330B2549E4B100896BF8 /* Frameworks */,
-				7F4B330C2549E4B100896BF8 /* CopyFiles */,
+				7F4B330C2549E4B100896BF8 /* Copy Files */,
 			);
 			buildRules = (
 			);
@@ -248,20 +255,22 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7F4B33522549E94A00896BF8 /* steamnetworkingsockets_messages_certs.pb.cc in Sources */,
 				7F4B33262549E7B400896BF8 /* dbg.cpp in Sources */,
 				7F4B33132549E4B100896BF8 /* GameNetworkingSocketsIOS.m in Sources */,
 				7F4B33562549E98C00896BF8 /* strtools.cpp in Sources */,
 				7F16A1D225CA645100095593 /* crypto.cpp in Sources */,
+				7FBCEE5728F5EA7900408AD3 /* steamnetworkingsockets_messages_certs.pb.cc in Sources */,
 				7F4B332E2549E7F700896BF8 /* utlbuffer.cpp in Sources */,
 				7F4B33302549E7FD00896BF8 /* utlmemory.cpp in Sources */,
 				7F4B331E2549E75800896BF8 /* crypto_25519_openssl.cpp in Sources */,
 				7F4B33242549E79F00896BF8 /* csteamnetworkingsockets.cpp in Sources */,
 				7F4B334C2549E89E00896BF8 /* steamnetworkingsockets_p2p.cpp in Sources */,
 				7FAFA6AB25CA7871007423AF /* csteamnetworkingmessages.cpp in Sources */,
+				7F6C8D8428F5744300D0334E /* steamnetworkingsockets_p2p_webrtc.cpp in Sources */,
 				7F4B333D2549E86300896BF8 /* steamnetworkingsockets_shared.cpp in Sources */,
-				7F4B33542549E94A00896BF8 /* steamnetworkingsockets_messages_udp.pb.cc in Sources */,
+				7F6C8D8328F5744300D0334E /* steamnetworkingsockets_stun.cpp in Sources */,
 				7F4B334D2549E89F00896BF8 /* steamnetworkingsockets_udp.cpp in Sources */,
+				7FBCEE5528F5EA7800408AD3 /* steamnetworkingsockets_messages.pb.cc in Sources */,
 				7F4B332C2549E7F100896BF8 /* netadr.cpp in Sources */,
 				7F4B33282549E7CB00896BF8 /* ipv6text.c in Sources */,
 				7F4B334E2549E89F00896BF8 /* steamnetworkingsockets_p2p_ice.cpp in Sources */,
@@ -271,7 +280,6 @@
 				7F4B332A2549E7DC00896BF8 /* keypair.cpp in Sources */,
 				7F4B33222549E77F00896BF8 /* crypto_textencode.cpp in Sources */,
 				7F4B33402549E86300896BF8 /* steamnetworkingsockets_stats.cpp in Sources */,
-				7F4B33532549E94A00896BF8 /* steamnetworkingsockets_messages.pb.cc in Sources */,
 				7F4B33202549E77400896BF8 /* crypto_openssl.cpp in Sources */,
 				7F4B333F2549E86300896BF8 /* steamnetworkingsockets_thinker.cpp in Sources */,
 				7F4B33462549E88700896BF8 /* steamnetworkingsockets_connections.cpp in Sources */,
@@ -279,6 +287,7 @@
 				7F4B33362549E83800896BF8 /* platformtime.cpp in Sources */,
 				7F4B334B2549E89E00896BF8 /* steamnetworkingsockets_snp.cpp in Sources */,
 				7F4B33442549E88700896BF8 /* steamnetworkingsockets_flat.cpp in Sources */,
+				7FBCEE5628F5EA7800408AD3 /* steamnetworkingsockets_messages_udp.pb.cc in Sources */,
 				7F4B333E2549E86300896BF8 /* steamnetworkingsockets_certstore.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -419,7 +428,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = T3XNSJP85B;
 				GCC_PREPROCESSOR_DEFINITIONS = (
-					OSX,
+					STEAMNETWORKINGSOCKETS_ENABLE_WEBRTC,
+					TARGET_OS_IPHONE,
 					GOOGLE_PROTOBUF_NO_RTTI,
 					PROTOBUF_USE_DLLS,
 					STEAMNETWORKINGSOCKETS_ENABLE_ICE,
@@ -428,7 +438,7 @@
 					ENABLE_OPENSSLCONNECTION,
 					CRYPTO_DISABLE_ENCRYPT_WITH_PASSWORD,
 					STEAMNETWORKINGSOCKETS_CRYPTO_VALVEOPENSSL,
-					STEAMNETWORKINGSOCKETS_CRYPTO_25519_OPENSSL,
+					VALVE_CRYPTO_25519_OPENSSL,
 					VALVE_CRYPTO_ENABLE_25519,
 					_CRT_SECURE_NO_WARNINGS,
 					_CRT_NONSTDC_NO_WARNINGS,
@@ -437,11 +447,10 @@
 					GameNetworkingSockets_EXPORTS,
 				);
 				HEADER_SEARCH_PATHS = (
+					/usr/local/include,
 					"../../src/**",
-					../../build/src,
+					"../../builds/bin/OpenSSL/Include/**",
 					../../include,
-					"../../build/bin/OpenSSL/Include/**",
-					"../../build/bin/protobuf/Include/**",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				LIBRARY_SEARCH_PATHS = (
