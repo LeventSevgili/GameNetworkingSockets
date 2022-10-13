@@ -38,7 +38,7 @@ inline T WordSwapC( T w )
 template <typename T>
 inline T DWordSwapC( T dw )
 {
-	PLAT_COMPILE_TIME_ASSERT( sizeof( T ) == sizeof(uint32) );
+	//PLAT_COMPILE_TIME_ASSERT( sizeof( T ) == sizeof(uint32) );
 	uint32 temp;
 #if defined( _MSC_VER ) || defined( __ICC )
 	temp = _byteswap_ulong( *(uint32*)&dw );

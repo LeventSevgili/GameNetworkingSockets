@@ -89,7 +89,8 @@ bool Plat_IsInDebugSession()
 #elif IsNintendoSwitch()
 	return false;
 #else
-	#error "HALP"
+	//#error "HALP"
+	return false;
 #endif
 }
 
