@@ -58,7 +58,7 @@ constexpr SteamNetworkingMicroseconds k_usecMaxTimestampDelta = k_msMaxPollWait 
 static void FlushSystemSpew();
 static void FlushSystemSpewLocked();
 
-int g_nSteamDatagramSocketBufferSize = 256*1024;
+int g_cbUDPSocketBufferSize = 256*1024;
 
 /// Global lock for all local data structures
 static Lock<RecursiveTimedMutexImpl> s_mutexGlobalLock( "global", 0 );
@@ -550,41 +550,42 @@ void CTaskList::RunTasks()
 			if ( pTask->m_pTarget )
 				scopeLock.Lock( s_lockTaskQueue );
 
-			// Do we have a lock we need to take?
-			if ( pTask->m_lockFunc )
-			{
-
-				int msTimeOut = 10;
-				if ( pTask->m_pTarget )
-				{
-					scopeLock.Lock( s_lockTaskQueue );
-
-					// Deleted while we locked?
-					if ( pTask->m_eTaskState != CQueuedTask::k_ETaskState_Queued )
-					{
-						Assert( pTask->m_eTaskState == CQueuedTask::k_ETaskState_ReadyToDelete );
-						Assert( pTask->m_pTarget == nullptr );
-						break;
-					}
-
-					// Use a short timeout and loop, in case we might deadlock
-					msTimeOut = 1;
-				}
-
-				if ( !(*pTask->m_lockFunc)( pTask->m_lockFuncArg, msTimeOut, pTask->m_pszTag ) )
-				{
-					// Other object is busy, or perhaps we are deadlocked?
-					continue;
-				}
-
-				// Deleted while we locked?
-				if ( pTask->m_eTaskState != CQueuedTask::k_ETaskState_Queued )
-				{
-					Assert( pTask->m_eTaskState == CQueuedTask::k_ETaskState_ReadyToDelete );
-					Assert( pTask->m_pTarget == nullptr );
-					break;
-				}
-			}
+// FIXME - has not been tested, and also does not have a good mechanism for unlocking.
+//			// Do we have a lock we need to take?
+//			if ( pTask->m_lockFunc )
+//			{
+//
+//				int msTimeOut = 10;
+//				if ( pTask->m_pTarget )
+//				{
+//					scopeLock.Lock( s_lockTaskQueue );
+//
+//					// Deleted while we locked?
+//					if ( pTask->m_eTaskState != CQueuedTask::k_ETaskState_Queued )
+//					{
+//						Assert( pTask->m_eTaskState == CQueuedTask::k_ETaskState_ReadyToDelete );
+//						Assert( pTask->m_pTarget == nullptr );
+//						break;
+//					}
+//
+//					// Use a short timeout and loop, in case we might deadlock
+//					msTimeOut = 1;
+//				}
+//
+//				if ( !(*pTask->m_lockFunc)( pTask->m_lockFuncArg, msTimeOut, pTask->m_pszTag ) )
+//				{
+//					// Other object is busy, or perhaps we are deadlocked?
+//					continue;
+//				}
+//
+//				// Deleted while we locked?
+//				if ( pTask->m_eTaskState != CQueuedTask::k_ETaskState_Queued )
+//				{
+//					Assert( pTask->m_eTaskState == CQueuedTask::k_ETaskState_ReadyToDelete );
+//					Assert( pTask->m_pTarget == nullptr );
+//					break;
+//				}
+//			}
 
 			// OK, we've got the locks we need and are ready to run.
 			// Unlink from the target, if we have one
@@ -969,6 +970,10 @@ public:
 				nullptr // lpCompletionRoutine
 			);
 			bool bResult = ( r == 0 );
+			if ( !bResult )
+			{
+				SpewWarning( "WSASendTo %s failed, returned %d, last error=0x%x\n", CUtlNetAdrRender( adrTo ).String(), r, GetLastSocketError() );
+			}
 		#else
 			msghdr msg;
 			msg.msg_name = (sockaddr *)&destAddress;
@@ -1050,6 +1055,11 @@ public:
 			ReallySpewTypeFmt( k_ESteamNetworkingSocketsDebugOutputType_Msg, "    %s\n", buf );
 		}
 	}
+
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DUALWIFI
+	CRawUDPSocketImpl *m_pDualWifiPartner = nullptr;
+	virtual IRawUDPSocket *GetDualWifiSecondarySocket( int nEnableSetting ) override;
+	#endif
 
 private:
 
@@ -1368,6 +1378,31 @@ void CRawUDPSocketImpl::Close()
 	// Mark the callback as detached, and put us in the queue for cleanup when it's safe.
 	InternalAddToCleanupQueue();
 
+	// Check for Dual Wifi
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DUALWIFI
+		if ( m_pDualWifiPartner )
+		{
+			Assert( m_pDualWifiPartner->m_pDualWifiPartner == this );
+
+			if ( m_eDualWifiStatus == k_EDualWifi_Primary )
+			{
+				Assert( m_pDualWifiPartner->m_eDualWifiStatus == k_EDualWifi_Secondary );
+				m_pDualWifiPartner->InternalAddToCleanupQueue();
+			}
+			else
+			{
+				// People shouldn't do this, but if they do, let's not crash
+				AssertMsg( false, "Closed secondary dual Wifi socket directly?" );
+			}
+
+			m_pDualWifiPartner->m_eDualWifiStatus = k_EDualWifi_Done;
+			m_pDualWifiPartner->m_pDualWifiPartner = nullptr;
+
+			m_eDualWifiStatus = k_EDualWifi_Done;
+			m_pDualWifiPartner = nullptr;
+		}
+	#endif
+
 	// Make sure we don't delay doing this too long
 	if ( s_bManualPollMode || ( s_pThreadSteamDatagram && s_pThreadSteamDatagram->get_id() != std::this_thread::get_id() ) )
 	{
@@ -1381,7 +1416,7 @@ void CRawUDPSocketImpl::Close()
 	}
 }
 
-static SOCKET OpenUDPSocketBoundToSockAddr( const void *sockaddr, size_t len, SteamDatagramErrMsg &errMsg, int *pnIPv6AddressFamilies )
+static SOCKET OpenUDPSocketBoundToSockAddr( const void *sockaddr, size_t len, SteamDatagramErrMsg &errMsg, int *pnIPv6AddressFamilies, int nBindInterface = -1 )
 {
 	unsigned int opt;
 
@@ -1417,14 +1452,14 @@ static SOCKET OpenUDPSocketBoundToSockAddr( const void *sockaddr, size_t len, St
 	#endif
 
 	// Set buffer sizes
-	opt = g_nSteamDatagramSocketBufferSize;
+	opt = g_cbUDPSocketBufferSize;
 	if ( setsockopt( sock, SOL_SOCKET, SO_SNDBUF, (char *)&opt, sizeof(opt) ) )
 	{
 		V_sprintf_safe( errMsg, "Failed to set socket send buffer size.  Error code 0x%08x.", GetLastSocketError() );
 		closesocket( sock );
 		return INVALID_SOCKET;
 	}
-	opt = g_nSteamDatagramSocketBufferSize;
+	opt = g_cbUDPSocketBufferSize;
 	if ( setsockopt( sock, SOL_SOCKET, SO_RCVBUF, (char *)&opt, sizeof(opt) ) == -1 )
 	{
 		V_sprintf_safe( errMsg, "Failed to set socket recv buffer size.  Error code 0x%08x.", GetLastSocketError() );
@@ -1467,7 +1502,46 @@ static SOCKET OpenUDPSocketBoundToSockAddr( const void *sockaddr, size_t len, St
 		}
 	}
 
-	// Bind it to specific desired port and/or interfaces
+	// Bind to particular interface
+	if ( nBindInterface >= 0 )
+	{
+		#ifdef _WIN32
+			Assert( nBindInterface != 0 ); // 0 is reserved, invalid value in Windows.
+
+			// Bind to particular interface for IPv4
+			if ( inaddr->sin_family == AF_INET || ( pnIPv6AddressFamilies && ( *pnIPv6AddressFamilies & k_nAddressFamily_IPv4 ) ) )
+			{
+				// WARNING: interface index should be in network byte order for IPPROTO_IP
+				const DWORD value = htonl(nBindInterface);
+				const int length = sizeof(value);
+				const auto error = setsockopt( sock , IPPROTO_IP, IP_UNICAST_IF, reinterpret_cast<const char*>(&value), length);
+				if (ERROR_SUCCESS != error)
+				{
+					V_sprintf_safe( errMsg, "sockopt(IP_PROTO_IP, IP_UNICAST_IF, %d) failed with error code 0x%08X.", nBindInterface, GetLastSocketError() );
+					closesocket( sock );
+					return INVALID_SOCKET;
+				}
+				SpewVerbose( "sockopt(IP_PROTO_IP, IP_UNICAST_IF, %d) OK\n", nBindInterface );
+			}
+
+			// Bind to particular interface for IPv6
+			if ( inaddr->sin_family == AF_INET6 || ( pnIPv6AddressFamilies && ( *pnIPv6AddressFamilies & k_nAddressFamily_IPv6 ) ) )
+			{
+				// WARNING: interface index should be in host byte order for IPPROTO_IPV6
+				auto length = static_cast<int>(sizeof(nBindInterface));
+				const auto error = setsockopt( sock, IPPROTO_IPV6, IPV6_UNICAST_IF, reinterpret_cast<const char*>(&nBindInterface), length);
+				if (ERROR_SUCCESS != error)
+				{
+					V_sprintf_safe( errMsg, "sockopt(IPPROTO_IPV6, IPV6_UNICAST_IF, %d) failed with error code 0x%08X.", nBindInterface, GetLastSocketError() );
+					closesocket( sock );
+					return INVALID_SOCKET;
+				}
+				SpewVerbose( "sockopt(IPPROTO_IPV6, IPV6_UNICAST_IF, %d) OK\n", nBindInterface );
+			}
+		#endif
+	}
+
+	// Bind it to specific desired local port/IP
 	if ( bind( sock, (struct sockaddr *)sockaddr, (socklen_t)len ) == -1 )
 	{
 		V_sprintf_safe( errMsg, "Failed to bind socket.  Error code 0x%08X.", GetLastSocketError() );
@@ -1479,7 +1553,7 @@ static SOCKET OpenUDPSocketBoundToSockAddr( const void *sockaddr, size_t len, St
 	return sock;
 }
 
-static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback, SteamDatagramErrMsg &errMsg, const SteamNetworkingIPAddr *pAddrLocal, int *pnAddressFamilies )
+static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback, SteamDatagramErrMsg &errMsg, const SteamNetworkingIPAddr *pAddrLocal, int *pnAddressFamilies, int nBindInterface = -1 )
 {
 	// Creating a socket *should* be fast, but sometimes the OS might need to do some work.
 	// We shouldn't do this too often, give it a little extra time.
@@ -1551,7 +1625,7 @@ static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback
 
 		// Try to get socket
 		int nIPv6AddressFamilies = nAddressFamilies;
-		sock = OpenUDPSocketBoundToSockAddr( &address6, sizeof(address6), errMsg, &nIPv6AddressFamilies );
+		sock = OpenUDPSocketBoundToSockAddr( &address6, sizeof(address6), errMsg, &nIPv6AddressFamilies, nBindInterface );
 
 		if ( sock == INVALID_SOCKET )
 		{
@@ -1579,7 +1653,7 @@ static CRawUDPSocketImpl *OpenRawUDPSocketInternal( CRecvPacketCallback callback
 		address4.sin_port = BigWord( addrLocal.m_port );
 
 		// Try to get socket
-		sock = OpenUDPSocketBoundToSockAddr( &address4, sizeof(address4), errMsg, nullptr );
+		sock = OpenUDPSocketBoundToSockAddr( &address4, sizeof(address4), errMsg, nullptr, nBindInterface );
 
 		// If we failed, well, we have no other options left to try.
 		if ( sock == INVALID_SOCKET )
@@ -1718,7 +1792,7 @@ static bool PollRawUDPSockets( int nMaxTimeoutMS, bool bManualPoll )
 				Assert( f != INVALID_SOCKET ); \
 				p.fd = f; \
 				p.events = POLLRDNORM; \
-				p.revents = 0x7fff; /* Make sure kernel is clearing events properly */ \
+				p.revents = -1; /* Make sure kernel is clearing events properly */ \
 			}
 
 			for ( CRawUDPSocketImpl *pSock: s_vecRawSockets )
@@ -1799,7 +1873,7 @@ static bool PollRawUDPSockets( int nMaxTimeoutMS, bool bManualPoll )
 		#else
 			if ( !( s_vecPollFDs[ idx ].revents & POLLRDNORM ) )
 				continue;
-			Assert( s_vecPollFDs[ idx ].revents != 0x7fff ); // Make sure kernel actually populated this
+			Assert( s_vecPollFDs[ idx ].revents != -1 ); // Make sure kernel actually populated this
 		#endif
 
 		// Drain the socket.  But if the callback gets cleared, that
@@ -1952,7 +2026,7 @@ static bool PollRawUDPSockets( int nMaxTimeoutMS, bool bManualPoll )
 		pollfd &wake = s_vecPollFDs[ nSocketsToPoll ];
 		if ( wake.revents & POLLRDNORM )
 		{
-			Assert( wake.revents != 0x7fff );
+			Assert( wake.revents != -1 );
 
 			// It's a wake request.  Pull a single packet out of the queue.
 			// We want one wake request to always result in exactly one wake up.
@@ -2012,6 +2086,400 @@ static void ProcessDeferredOperations()
 	// not polling on them and we know we hold the lock
 	ProcessPendingDestroyClosedRawUDPSockets();
 }
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dual Wifi band support
+//
+/////////////////////////////////////////////////////////////////////////////
+
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DUALWIFI
+
+#include <wlanapi.h>
+static int s_ifaceDualWifiSecondary = -1; // -1 means we haven't tried yet.  Any other negative value means, we tried and failed
+static HANDLE wlanHandle = INVALID_HANDLE_VALUE;
+
+static HMODULE hModuleWlanAPI = NULL;
+
+static 
+DWORD
+(WINAPI *pWlanOpenHandle)(
+    DWORD dwClientVersion,
+    PVOID pReserved,
+    PDWORD pdwNegotiatedVersion,
+    PHANDLE phClientHandle
+);
+
+static
+DWORD
+(WINAPI *pWlanCloseHandle)(
+    HANDLE hClientHandle,
+    PVOID pReserved
+);
+
+static
+DWORD
+(WINAPI *pWlanEnumInterfaces)(
+    HANDLE hClientHandle,
+    PVOID pReserved,
+    PWLAN_INTERFACE_INFO_LIST *ppInterfaceList
+);
+
+static
+DWORD
+( WINAPI *pWlanSetInterface)(
+    HANDLE hClientHandle,
+    CONST GUID *pInterfaceGuid,
+    WLAN_INTF_OPCODE OpCode,
+    DWORD dwDataSize,
+    CONST PVOID pData,
+    PVOID pReserved
+);
+
+static
+DWORD
+( WINAPI *pWlanQueryInterface)(
+    HANDLE hClientHandle,
+    CONST GUID *pInterfaceGuid,
+    WLAN_INTF_OPCODE OpCode,
+    PVOID pReserved,
+    PDWORD pdwDataSize,
+    PVOID *ppData,
+    PWLAN_OPCODE_VALUE_TYPE pWlanOpcodeValueType
+);
+
+
+
+void DualWifiShutdown()
+{
+	if ( wlanHandle != INVALID_HANDLE_VALUE )
+	{
+		(*pWlanCloseHandle)( wlanHandle, nullptr );
+		wlanHandle = INVALID_HANDLE_VALUE;
+	}
+	s_ifaceDualWifiSecondary = -1;
+}
+
+#if WDK_NTDDI_VERSION < 0x0A00000B	// These definitions are available in wlanapi.h in Windows SDK 10.0.22000.0
+// !KLUDGE! Pasted from an early version of wlan.h.
+namespace wlan_new
+{
+#ifdef __midl
+// use the 4-byte enum
+typedef [v1_enum] enum _WLAN_INTF_OPCODE {
+#else
+typedef enum _WLAN_INTF_OPCODE {
+#endif
+    wlan_intf_opcode_autoconf_start = 0x000000000,
+    wlan_intf_opcode_autoconf_enabled,
+    wlan_intf_opcode_background_scan_enabled,
+    wlan_intf_opcode_media_streaming_mode,
+    wlan_intf_opcode_radio_state,
+    wlan_intf_opcode_bss_type,
+    wlan_intf_opcode_interface_state,
+    wlan_intf_opcode_current_connection,
+    wlan_intf_opcode_channel_number,
+    wlan_intf_opcode_supported_infrastructure_auth_cipher_pairs,
+    wlan_intf_opcode_supported_adhoc_auth_cipher_pairs,
+    wlan_intf_opcode_supported_country_or_region_string_list,
+    wlan_intf_opcode_current_operation_mode,
+    wlan_intf_opcode_supported_safe_mode,
+    wlan_intf_opcode_certified_safe_mode,
+    wlan_intf_opcode_hosted_network_capable,
+    wlan_intf_opcode_management_frame_protection_capable,
+    wlan_intf_opcode_secondary_sta_interfaces,
+    wlan_intf_opcode_secondary_sta_synchronized_connections,
+    wlan_intf_opcode_autoconf_end = 0x0fffffff,
+    wlan_intf_opcode_msm_start = 0x10000100,
+    wlan_intf_opcode_statistics,
+    wlan_intf_opcode_rssi,
+    wlan_intf_opcode_msm_end = 0x1fffffff,
+    wlan_intf_opcode_security_start = 0x20010000,
+    wlan_intf_opcode_security_end = 0x2fffffff,
+    wlan_intf_opcode_ihv_start = 0x30000000,
+    wlan_intf_opcode_ihv_end = 0x3fffffff
+} WLAN_INTF_OPCODE, *PWLAN_INTF_OPCODE;
+}
+const WLAN_INTF_OPCODE wlan_intf_opcode_secondary_sta_synchronized_connections = (WLAN_INTF_OPCODE)wlan_new::wlan_intf_opcode_secondary_sta_synchronized_connections;
+const WLAN_INTF_OPCODE wlan_intf_opcode_secondary_sta_interfaces = (WLAN_INTF_OPCODE)wlan_new::wlan_intf_opcode_secondary_sta_interfaces;
+#endif // WDK_NTDDI_VERSION < 0x0A00000B
+
+static void DualWifiInitFailed( const char *fmt, ... )
+{
+	va_list ap;
+	va_start( ap, fmt );
+	char buf[ 512 ];
+	V_vsprintf_safe( buf, fmt, ap );
+	SpewMsg( "DualWifi not detected.  We won't try again.  %s\n", buf );
+	DualWifiShutdown();
+	s_ifaceDualWifiSecondary = -2; // but remember that we failed
+}
+
+static int ConvertInterfaceGuidToIndex(const GUID& interfaceGuid)
+{
+	//
+	// These functions were added with Vista, so load dynamically
+	// in case
+	//
+
+	typedef
+	NETIO_STATUS
+	(NETIOAPI_API_*FnConvertInterfaceGuidToLuid)(
+		_In_ CONST GUID *InterfaceGuid,
+		_Out_ PNET_LUID InterfaceLuid
+		);
+	typedef 
+	NETIO_STATUS
+	(NETIOAPI_API_*FnConvertInterfaceLuidToIndex)(
+		_In_ CONST NET_LUID *InterfaceLuid,
+		_Out_ PNET_IFINDEX InterfaceIndex
+    );
+
+	static HMODULE hModule = LoadLibraryA( "Iphlpapi.dll" );
+	static FnConvertInterfaceGuidToLuid pConvertInterfaceGuidToLuid = hModule ? (FnConvertInterfaceGuidToLuid)GetProcAddress( hModule, "ConvertInterfaceGuidToLuid" ) : nullptr;
+	static FnConvertInterfaceLuidToIndex pConvertInterfaceLuidToIndex = hModule ? (FnConvertInterfaceLuidToIndex)GetProcAddress( hModule, "ConvertInterfaceLuidToIndex" ) : nullptr;;
+	if ( !pConvertInterfaceGuidToLuid || !pConvertInterfaceLuidToIndex )
+	{
+		AssertMsg( false, "How did I get here?" );
+		return -1;
+	}
+
+    NET_LUID interfaceLuid{};
+    auto error = (pConvertInterfaceGuidToLuid)(&interfaceGuid, &interfaceLuid);
+    if ( ERROR_SUCCESS != error )
+	{
+		AssertMsg( false, "ConvertInterfaceGuidToLuid failed 0x%x", error );
+		return -1;
+	}
+
+    NET_IFINDEX interfaceIndex = 0;
+    error = (*pConvertInterfaceLuidToIndex)(&interfaceLuid, &interfaceIndex);
+    if ( ERROR_SUCCESS != error )
+	{
+		AssertMsg( false, "ConvertInterfaceLuidToIndex failed 0x%x", error );
+		return -1;
+	}
+
+    return static_cast<int>(interfaceIndex);
+}
+
+class RenderGUID
+{
+	char buf[64];
+public:
+	RenderGUID( const GUID &guid )
+	{
+		// https://stackoverflow.com/a/18114061/8004137
+		V_sprintf_safe( buf, "{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}",
+			guid.Data1, guid.Data2, guid.Data3, 
+			guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
+			guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
+	}
+	const char *c_str() const { return buf; }
+};
+
+template <typename F>
+bool MyGetProcAddress( F& fn, HMODULE hm, const char *pszName )
+{
+	if ( hm == NULL )
+		fn = nullptr;
+	else
+		fn = (F)GetProcAddress( hm, pszName );
+	return fn != nullptr;
+}
+
+static int GetDualWifiSecondaryInterfaceIndex( int nSimulateMode )
+{
+	// First time attempt?
+	// FIXME - it's not clear to me when I should retry
+	if ( s_ifaceDualWifiSecondary != -1 )
+		return s_ifaceDualWifiSecondary;
+
+	// Dynamically load wlanapi.dll the first time.
+	if ( hModuleWlanAPI == NULL )
+	{
+		hModuleWlanAPI = LoadLibraryA( "wlanapi.dll" );
+		if (
+			!MyGetProcAddress( pWlanOpenHandle, hModuleWlanAPI, "WlanOpenHandle" )
+			|| !MyGetProcAddress( pWlanCloseHandle, hModuleWlanAPI, "WlanCloseHandle" )
+			|| !MyGetProcAddress( pWlanEnumInterfaces, hModuleWlanAPI, "WlanEnumInterfaces" )
+			|| !MyGetProcAddress( pWlanSetInterface, hModuleWlanAPI, "WlanSetInterface" )
+			|| !MyGetProcAddress( pWlanQueryInterface, hModuleWlanAPI, "WlanQueryInterface" )
+		) {
+			DualWifiInitFailed( "Failed to load wlanAPI.DLL" );
+			return -1;
+		}
+	}
+
+	// First time we need to open Wlan session
+	if ( wlanHandle == INVALID_HANDLE_VALUE )
+	{
+		DWORD clientVersion = 2; // Vista+ APIs
+		DWORD curVersion = 0;
+		DWORD error = (*pWlanOpenHandle)(clientVersion, nullptr, &curVersion, &wlanHandle );
+		if ( ERROR_SUCCESS != error || wlanHandle == INVALID_HANDLE_VALUE )
+		{
+			DualWifiInitFailed( "WlanOpenHandle failed 0x%x.", error );
+			return -1;
+		}
+	}
+
+	PWLAN_INTERFACE_INFO_LIST primaryInterfaceList = nullptr;
+	DWORD error = (*pWlanEnumInterfaces)(wlanHandle, nullptr, &primaryInterfaceList);
+	if ( ERROR_SUCCESS != error || !primaryInterfaceList )
+	{
+		DualWifiInitFailed( "WlanEnumInterfaces failed 0x%x.", error );
+		return -1;
+	}
+
+	if ( nSimulateMode == k_nDualWifiEnable_DoNotEnumerate )
+	{
+		DualWifiInitFailed( "Not really checking for capable adapters as per DualWifi_Enable=%d", nSimulateMode );
+		s_ifaceDualWifiSecondary = -1;
+		return -1;
+	}
+
+	// Look for the first Wireless interface that we can enable DualSTA for
+	for ( DWORD idxPrimary = 0 ; idxPrimary < primaryInterfaceList->dwNumberOfItems ; ++idxPrimary )
+	{
+		const GUID primaryInterfaceGuid = primaryInterfaceList->InterfaceInfo[idxPrimary].InterfaceGuid;
+
+		// Get adapter name in UTF8
+		char szInterfaceDescription[ 256 ];
+		memset( szInterfaceDescription, 0, sizeof(szInterfaceDescription) );
+		WideCharToMultiByte(
+			CP_UTF8, // codepage
+			0, // flags
+			primaryInterfaceList->InterfaceInfo[idxPrimary].strInterfaceDescription, -1, // input string and length
+			szInterfaceDescription, sizeof(szInterfaceDescription)-1, // output buffer and SIZE in bytes
+			nullptr, nullptr // no default char, and we don't care if it was used
+		);
+
+		// Try to enable the feature on this adapter.  This is where most adapters should fail.
+		BOOL enable = TRUE;
+		error = (*pWlanSetInterface)(
+			wlanHandle, &primaryInterfaceGuid, wlan_intf_opcode_secondary_sta_synchronized_connections, sizeof(BOOL), static_cast<PVOID>(&enable), nullptr);
+		if ( ERROR_SUCCESS != error )
+		{
+			SpewVerbose( "Dual Wifi support not detected on adapter '%s' (wlan_intf_opcode_secondary_sta_synchronized_connections returned 0x%x)\n", szInterfaceDescription, error );
+			continue;
+		}
+
+		// Feature is detected!
+		SpewMsg( "Dual Wifi support enabled successfully on adapter '%s'\n", szInterfaceDescription );
+
+		PWLAN_INTERFACE_INFO_LIST secondaryInterfaceList = nullptr;
+		DWORD dataSize = 0;
+		error = (*pWlanQueryInterface)(
+			wlanHandle,
+			&primaryInterfaceGuid,
+			wlan_intf_opcode_secondary_sta_interfaces,
+			nullptr,
+			&dataSize,
+			reinterpret_cast<PVOID*>(&secondaryInterfaceList),
+			nullptr);
+		if ( ERROR_SUCCESS != error || !secondaryInterfaceList )
+		{
+			AssertMsg( false, "wlan_intf_opcode_secondary_sta_synchronized_connections succeeded, but wlan_intf_opcode_secondary_sta_interfaces failed 0x%x?", error );
+			continue;
+		}
+
+		for ( DWORD idxSecondary = 0 ; idxSecondary < secondaryInterfaceList->dwNumberOfItems ; ++idxSecondary )
+		{
+			s_ifaceDualWifiSecondary = ConvertInterfaceGuidToIndex( secondaryInterfaceList->InterfaceInfo[ idxSecondary ].InterfaceGuid );
+			if ( s_ifaceDualWifiSecondary >= 0 )
+			{
+				SpewMsg( "Primary DualSTA interfaces %s matched to secondary interface %s, index %d\n",
+					RenderGUID( primaryInterfaceGuid ).c_str(), RenderGUID( secondaryInterfaceList->InterfaceInfo[ idxSecondary ].InterfaceGuid ).c_str(),
+					s_ifaceDualWifiSecondary );
+				return s_ifaceDualWifiSecondary;
+			}
+		}
+
+		AssertMsg( false, "Could not find secondary wifi adapter, even though wlan_intf_opcode_secondary_sta_synchronized_connections succeeded" );
+	}
+
+	// Failed.  This should be common
+	DualWifiInitFailed( "Didn't find any Dual-Wifi-capable Wifi adapters" );
+	return -1;
+}
+
+IRawUDPSocket *CRawUDPSocketImpl::GetDualWifiSecondarySocket( int nEnableSetting )
+{
+	SteamDatagramErrMsg errMsg;
+
+	switch ( m_eDualWifiStatus )
+	{
+		case k_EDualWifi_NotAttempted:
+		{
+			Assert( m_pDualWifiPartner == nullptr );
+
+			// Locate the secondary interface, if any.
+			int ifaceIndex = -1;
+			if ( nEnableSetting == k_nDualWifiEnable_ForceSimulate )
+			{
+				SpewMsg( "Not actually checking for Dual-wifi support, just creating simulating support, as per DualWifi_Enable=%d\n", nEnableSetting );
+			}
+			else
+			{
+				ifaceIndex = GetDualWifiSecondaryInterfaceIndex( nEnableSetting );
+				if ( ifaceIndex < 0 && nEnableSetting == k_nDualWifiEnable_Enable )
+				{
+					// not found, and we don't want to simulate support.
+					// This will be common!  Don't retry.
+					m_eDualWifiStatus = k_EDualWifi_Done;
+					break;
+				}
+			}
+
+			if ( nEnableSetting == k_nDualWifiEnable_DoNotBind )
+			{
+				SpewMsg( "Not actually creating secondary socket as per DualWifi_Enable=%d\n", nEnableSetting );
+				m_eDualWifiStatus = k_EDualWifi_Done;
+				break;
+			}
+
+			// Create the second socket, binding it the interface as appropriate
+			int nTempAddressFamiles = m_nAddressFamilies;
+			m_pDualWifiPartner = OpenRawUDPSocketInternal( m_callback, errMsg, nullptr, &nTempAddressFamiles, ifaceIndex );
+			if ( !m_pDualWifiPartner )
+			{
+				SpewWarning( "Failed to create dual Wifi secondary socket.  %s\n", errMsg );
+				m_eDualWifiStatus = k_EDualWifi_Done; // Don't retry
+				break;
+			}
+
+			m_eDualWifiStatus = k_EDualWifi_Primary;
+			m_pDualWifiPartner->m_eDualWifiStatus = k_EDualWifi_Secondary;
+			m_pDualWifiPartner->m_pDualWifiPartner = this;
+
+			SpewMsg( "Created %sdual Wifi secondary socket OK.  Primary local address is %s, secondary is %s\n",
+				ifaceIndex < 0 ? "simulated " : "",
+				SteamNetworkingIPAddrRender( m_boundAddr ).c_str(), SteamNetworkingIPAddrRender( m_pDualWifiPartner->m_boundAddr ).c_str() );
+			return m_pDualWifiPartner;
+		}
+
+		case k_EDualWifi_Primary:
+			Assert( m_pDualWifiPartner );
+			return m_pDualWifiPartner;
+
+		default:
+		case k_EDualWifi_Secondary:
+			Assert( false );
+			break;
+
+		case k_EDualWifi_Done:
+			break;
+	}
+
+	return nullptr;
+}
+
+#else
+
+void DualWifiShutdown() {}
+
+#endif
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -2747,6 +3215,9 @@ void SteamNetworkingSocketsLowLevelDecRef()
 	// Shutdown event tracing
 	ETW_Kill();
 
+	// Shutdown Dual wifi support
+	DualWifiShutdown();
+
 	// Nuke sockets and COM
 	#ifdef _WIN32
 		::timeEndPeriod( 1 );
@@ -2932,6 +3403,22 @@ STEAMNETWORKINGSOCKETS_INTERFACE void SteamNetworkingSockets_DefaultPreFormatDeb
 	char *msgDest = buf;
 	if ( pstrFile )
 	{
+
+		// Skip to "/src/"
+		for (char const* s = pstrFile; *s; ++s)
+		{
+			if (
+				(s[0] == '/' || s[0] == '\\')
+				&& s[1] == 's'
+				&& s[2] == 'r'
+				&& s[3] == 'c'
+				&& (s[4] == '/' || s[4] == '\\')
+			) {
+				pstrFile = s + 1;
+				break;
+			}
+		}
+
 		int l = V_sprintf_safe( buf, "%s(%d): ", pstrFile, nLine );
 		szBuf -= l;
 		msgDest += l;

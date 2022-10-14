@@ -39,12 +39,30 @@ constexpr int k_nICECloseCode_Local_Special = k_ESteamNetConnectionEnd_Local_Max
 constexpr int k_nICECloseCode_Aborted = k_ESteamNetConnectionEnd_Local_Max-2;
 constexpr int k_nICECloseCode_Remote_NotEnabled = k_ESteamNetConnectionEnd_Remote_Max;
 
+// For some types of connections we send actual message data in the signals.
+// This constant defines the max we should ever send in a single signal
+constexpr int k_cbMaxSendMessagDataInRSVP = 4200;
+
+// Never send P2P signals faster than this rate
+constexpr SteamNetworkingMicroseconds k_usecP2PSignalMinSendInterval = 100*1000;
+
 class CConnectionTransportP2PSDR;
 class CConnectionTransportToSDRServer;
 class CConnectionTransportFromSDRClient;
 class CConnectionTransportP2PICE;
 class CSteamNetworkListenSocketSDRServer;
+class CMessagesEndPoint;
 struct CachedRelayAuthTicket;
+
+// Handy class to render a debug description of a virtual port
+struct VirtualPortRender
+{
+	VirtualPortRender( int nVirtualPort );
+	const char *c_str() const { return m_buf; }
+
+private:
+	char m_buf[64];
+};
 
 //-----------------------------------------------------------------------------
 /// Base class for listen sockets where the client will connect to us using
@@ -205,7 +223,7 @@ public:
 	// CSteamNetworkConnectionBase overrides
 	virtual void FreeResources() override;
 	virtual EResult AcceptConnection( SteamNetworkingMicroseconds usecNow ) override final;
-	virtual void GetConnectionTypeDescription( ConnectionTypeDescription_t &szDescription ) const override;
+	virtual void GetConnectionTypeDescription( ConnectionTypeDescription_t &szDescription ) const override final;
 	virtual void ThinkConnection( SteamNetworkingMicroseconds usecNow ) override;
 	virtual SteamNetworkingMicroseconds ThinkConnection_ClientConnecting( SteamNetworkingMicroseconds usecNow ) override;
 	virtual SteamNetworkingMicroseconds ThinkConnection_FindingRoute( SteamNetworkingMicroseconds usecNow ) override;
@@ -215,11 +233,12 @@ public:
 	virtual void ProcessSNPPing( int msPing, RecvPacketContext_t &ctx ) override;
 	virtual bool BSupportsSymmetricMode() override;
 	ESteamNetConnectionEnd CheckRemoteCert( const CertAuthScope *pCACertAuthScope, SteamNetworkingErrMsg &errMsg ) override;
+	virtual int64 _APISendMessageToConnection( CSteamNetworkingMessage *pMsg, SteamNetworkingMicroseconds usecNow, bool *pbThinkImmediately ) override;
 	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DIAGNOSTICSUI
 		virtual void ConnectionPopulateDiagnostics( ESteamNetworkingConnectionState eOldState, CGameNetworkingUI_ConnectionState &msgConnectionState, SteamNetworkingMicroseconds usecNow ) override;
 	#endif
 
-	void SendConnectOKSignal( SteamNetworkingMicroseconds usecNow );
+	void QueueSendConnectOKSignal();
 	void SendConnectionClosedSignal( SteamNetworkingMicroseconds usecNow );
 	void SendNoConnectionSignal( SteamNetworkingMicroseconds usecNow );
 
@@ -228,7 +247,7 @@ public:
 
 	/// Given a partially-completed CMsgSteamNetworkingP2PRendezvous, finish filling out
 	/// the required fields, and send it to the peer via the signaling mechanism
-	void SetRendezvousCommonFieldsAndSendSignal( CMsgSteamNetworkingP2PRendezvous &msg, SteamNetworkingMicroseconds usecNow, const char *pszDebugReason );
+	bool SetRendezvousCommonFieldsAndSendSignal( CMsgSteamNetworkingP2PRendezvous &msg, SteamNetworkingMicroseconds usecNow, const char *pszDebugReason );
 
 	bool ProcessSignal( const CMsgSteamNetworkingP2PRendezvous &msg, SteamNetworkingMicroseconds usecNow );
 	void ProcessSignal_ConnectOK( const CMsgSteamNetworkingP2PRendezvous_ConnectOK &msgConnectOK, SteamNetworkingMicroseconds usecNow );
@@ -258,14 +277,32 @@ public:
 	/// as the local virtual port.
 	int m_nRemoteVirtualPort;
 
-	/// local virtual port is a configuration option
-	inline int LocalVirtualPort() const { return m_connectionConfig.m_LocalVirtualPort.Get(); }
-
 	/// Handle to our entry in g_mapIncomingP2PConnections, or -1 if we're not in the map
 	int m_idxMapP2PConnectionsByRemoteInfo;
 
 	/// How to send signals to the remote host for this
 	ISteamNetworkingConnectionSignaling *m_pSignaling;
+
+	// For certain types of connections (e.g. FakeUDPPort) we don't use our own
+	// state machine to send the connect request messages.  Instead, we only
+	// send a connect request signal when the app sends a message, and we send
+	// that message in the signal itself.  Because for FakeUDP, there is no
+	// concept of "you have an incoming connection, do you want to accept it?"
+	// The only feedback the app gets is messages.  So, we deliver the message,
+	// and if the application wants to accept the connection and communicate
+	// with the peer, then it will reply.
+	bool m_bAppConnectHandshakePacketsInRSVP;
+
+	/// True if we need to send a "connect OK" message via signaling.  This
+	/// is queued and we flush it out as soon as we're ready.  Because often
+	/// it's advantageous when we get a connect request to wait just a bit before
+	/// replying, so that we can include some routing info, application reply
+	/// messages (when appropriate), etc.
+	bool m_bNeedToSendConnectOKSignal;
+
+	/// True if we should delay sending the first signal until we have some
+	/// initial routing info
+	bool m_bWaitForInitialRoutingReady;
 
 	//
 	// Different transports
@@ -405,6 +442,9 @@ public:
 
 	void UpdateTransportSummaries( SteamNetworkingMicroseconds usecNow );
 
+	SteamNetworkingMicroseconds GetSignalReliableRTO();
+	SteamNetworkingMicroseconds GetWhenCanSendNextP2PSignal() const { return m_usecWhenSentLastSignal + k_usecP2PSignalMinSendInterval; }
+
 	// FIXME - UDP transport for LAN discovery, so P2P works without any signaling
 
 	inline int LogLevel_P2PRendezvous() const { return m_connectionConfig.m_LogLevel_P2PRendezvous.Get(); }
@@ -413,16 +453,6 @@ public:
 
 	void RemoveP2PConnectionMapByRemoteInfo();
 	bool BEnsureInP2PConnectionMapByRemoteInfo( SteamDatagramErrMsg &errMsg );
-
-	//
-	// FakeIP
-	//
-#ifdef STEAMNETWORKINGSOCKETS_ENABLE_FAKEIP
-
-	FakeIPReference m_fakeIPRef;
-	virtual EResult APIGetRemoteFakeIPForConnection( SteamNetworkingIPAddr *pOutAddr ) override;
-
-#endif
 
 protected:
 	virtual ~CSteamNetworkConnectionP2P();
@@ -433,6 +463,9 @@ protected:
 	virtual void PopulateRendezvousMsgWithTransportInfo( CMsgSteamNetworkingP2PRendezvous &msg, SteamNetworkingMicroseconds usecNow );
 
 	virtual EResult P2PInternalAcceptConnection( SteamNetworkingMicroseconds usecNow );
+
+	// Get the identity and possibly fake IP for connection description purposes
+	virtual void GetConnectionTypeDescription_GetP2PType( ConnectionTypeDescription_t &szDescription ) const;
 
 private:
 
@@ -447,6 +480,7 @@ private:
 
 	const char *m_pszNeedToSendSignalReason;
 	SteamNetworkingMicroseconds m_usecSendSignalDeadline;
+	SteamNetworkingMicroseconds m_usecWhenSentLastSignal;
 	uint32 m_nLastSendRendesvousMessageID;
 	uint32 m_nLastRecvRendesvousMessageID;
 
@@ -454,6 +488,11 @@ private:
 	void DestroyICENow();
 
 	void PeerSelectedTransportChanged();
+
+	// Check if we should wait a bit for routing info to be
+	// ready, before sending the first signal to a peer.  This
+	// allows us to send fewer signals and speeds up negotiation.
+	SteamNetworkingMicroseconds CheckWaitForInitialRoutingReady( SteamNetworkingMicroseconds usecNow );
 };
 
 inline CSteamNetworkConnectionP2P &CConnectionTransportP2PBase::Connection() const

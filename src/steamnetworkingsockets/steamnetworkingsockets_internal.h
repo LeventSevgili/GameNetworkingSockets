@@ -80,6 +80,30 @@
 	#endif
 #endif
 
+/// Max number of lanes we support as sender and receiver.  We make this a define, so that
+/// you can override it.  If you don't need support for lanes, then we can make a few optimizations
+#ifndef STEAMNETWORKINGSOCKETS_MAX_LANES
+	#define STEAMNETWORKINGSOCKETS_MAX_LANES 255
+#endif
+#if STEAMNETWORKINGSOCKETS_MAX_LANES < 1
+	#error "Invalid STEAMNETWORKINGSOCKETS_MAX_LANES"
+#endif
+
+// Enable DualSTA support on Windows
+#if defined(_WINDOWS) && !defined(STEAMNETWORKINGSOCKETS_OPENSOURCE)
+	#define STEAMNETWORKINGSOCKETS_ENABLE_DUALWIFI
+#endif
+
+enum EDualWifiEnable {
+	k_nDualWifiEnable_Disable = 0,
+	k_nDualWifiEnable_Enable = 1, // 
+	k_nDualWifiEnable_DoNotEnumerate = 2, // Enumerate primary adapters, but don't actually try to enable any Dual Wifi support
+	k_nDualWifiEnable_DoNotBind = 3, // Try to turn on Dual Wifi and locate the secondary adapter, but don't actually bind
+	k_nDualWifiEnable_ForceSimulate = 4, // Don't really do any DualWifi work, just open up another "regular" socket
+
+	k_nDualWifiEnable_MAX = k_nDualWifiEnable_ForceSimulate // Maximum legal value
+};
+
 /// Enumerate different kinds of transport that can be used
 enum ESteamNetTransportKind
 {
@@ -201,19 +225,19 @@ const int k_cbSteamNetworkingSocketsNoFragmentHeaderReserve = 100;
 /// Size of security tag for AES-GCM.
 /// It would be nice to use a smaller tag, but BCrypt requires a 16-byte tag,
 /// which is what OpenSSL uses by default for TLS.
-const int k_cbSteamNetwokingSocketsEncrytionTagSize = 16;
+const int k_cbAESGCMTagSize = 16;
 
 /// Max length of plaintext and encrypted payload we will send.  AES-GCM does
 /// not use padding (but it does have the security tag).  So this can be
 /// arbitrary, it does not need to account for the block size.
 const int k_cbSteamNetworkingSocketsMaxEncryptedPayloadSend = 1248;
-const int k_cbSteamNetworkingSocketsMaxPlaintextPayloadSend = k_cbSteamNetworkingSocketsMaxEncryptedPayloadSend-k_cbSteamNetwokingSocketsEncrytionTagSize;
+const int k_cbSteamNetworkingSocketsTypicalMaxPlaintextPayloadSend = k_cbSteamNetworkingSocketsMaxEncryptedPayloadSend-k_cbAESGCMTagSize;
 
 /// Use larger limits for what we are willing to receive.
 const int k_cbSteamNetworkingSocketsMaxEncryptedPayloadRecv = k_cbSteamNetworkingSocketsMaxUDPMsgLen;
 const int k_cbSteamNetworkingSocketsMaxPlaintextPayloadRecv = k_cbSteamNetworkingSocketsMaxUDPMsgLen;
 
-/// If we have a cert that is going to expire in <N secondws, try to renew it
+/// If we have a cert that is going to expire in <N seconds, try to renew it
 const int k_nSecCertExpirySeekRenew = 3600*2;
 
 /// Make sure we have enough room for our headers and occasional inline pings and stats and such
@@ -302,7 +326,7 @@ constexpr int k_nRouteScoreHuge = INT_MAX/8;
 /// Protocol version of this code.  This is a blunt instrument, which is incremented when we
 /// wish to change the wire protocol in a way that doesn't have some other easy
 /// mechanism for dealing with compatibility (e.g. using protobuf's robust mechanisms).
-const uint32 k_nCurrentProtocolVersion = 10;
+const uint32 k_nCurrentProtocolVersion = 11;
 
 /// Minimum required version we will accept from a peer.  We increment this
 /// when we introduce wire breaking protocol changes and do not wish to be
@@ -320,8 +344,26 @@ const int k_nVirtualPort_Messages = 0x7fffffff;
 /// This is a much bigger reservation of the space than we ever actually expect to
 /// use in practice.  Furthermore, these numbers should only be used locally.
 /// Outside of the local process, we would always use the actual fake port value.
-const int k_nVirtualPort_FakePort0 = 0x7fffff00;
-const int k_nVirtualPort_FakePortMax = 0x7ffffffe;
+const int k_nFakePort_MaxGlobalAllocationAttempt = 255;
+const int k_nVirtualPort_GlobalFakePort0 = 0x7fffff00;
+const int k_nVirtualPort_GlobalFakePortMax = k_nVirtualPort_GlobalFakePort0 + k_nFakePort_MaxGlobalAllocationAttempt - 1;
+
+const int k_nFakePort_MaxEphemeralPorts = 256;
+const int k_nVirtualPort_EphemeralFakePort0 = 0x7ffffe00;
+const int k_nVirtualPort_EphemeralFakePortMax = k_nVirtualPort_EphemeralFakePort0 + k_nFakePort_MaxEphemeralPorts - 1;
+
+inline bool IsVirtualPortEphemeralFakePort( int nVirtualPort )
+{
+	return k_nVirtualPort_EphemeralFakePort0 <= nVirtualPort && nVirtualPort <= k_nVirtualPort_EphemeralFakePortMax;
+}
+inline bool IsVirtualPortGlobalFakePort( int nVirtualPort )
+{
+	return k_nVirtualPort_GlobalFakePort0 <= nVirtualPort && nVirtualPort <= k_nVirtualPort_GlobalFakePortMax;
+}
+inline bool IsVirtualPortFakePort( int nVirtualPort )
+{
+	return k_nVirtualPort_EphemeralFakePort0 <= nVirtualPort && nVirtualPort <= k_nVirtualPort_GlobalFakePortMax;
+}
 
 // Serialize an UNSIGNED quantity.  Returns pointer to the next byte.
 // https://developers.google.com/protocol-buffers/docs/encoding
@@ -541,10 +583,31 @@ inline int64 NearestWithSameLowerBits( T nLowerBits, int64 nReference )
 	return nReference + nDiff;
 }
 
-/// Calculate hash of identity.
+/// Calculate hash of SteamNetworkingIdentity
 struct SteamNetworkingIdentityHash
 {
-	uint32 operator()( const SteamNetworkingIdentity &x ) const;
+	uint32 operator()(struct SteamNetworkingIdentity const &x ) const
+	{
+		// Make sure we don't have any packing or alignment issues
+		COMPILE_TIME_ASSERT( offsetof( SteamNetworkingIdentity, m_eType ) == 0 );
+		COMPILE_TIME_ASSERT( sizeof( x.m_eType ) == 4 );
+		COMPILE_TIME_ASSERT( offsetof( SteamNetworkingIdentity, m_cbSize ) == 4 );
+		COMPILE_TIME_ASSERT( sizeof( x.m_cbSize ) == 4 );
+		COMPILE_TIME_ASSERT( offsetof( SteamNetworkingIdentity, m_steamID64 ) == 8 );
+
+		return Murmorhash32( &x, sizeof( x.m_eType ) + sizeof( x.m_cbSize ) + x.m_cbSize );
+	}
+};
+
+/// Calculate hash of SteamNetworkingIPAddr
+struct SteamNetworkingIPAddrHash
+{
+	uint32 operator()( struct SteamNetworkingIPAddr const &x ) const
+	{
+		// Make sure we don't have any packing or alignment issues
+		COMPILE_TIME_ASSERT( sizeof( SteamNetworkingIPAddr ) == 16+2 );
+		return Murmorhash32( &x, sizeof( SteamNetworkingIPAddr ) );
+	};
 };
 
 inline bool IsValidSteamIDForIdentity( CSteamID steamID )
@@ -766,6 +829,14 @@ struct ConnectionConfig
 	ConfigValue<int32> m_LocalVirtualPort;
 	ConfigValue<int64> m_ConnectionUserData;
 
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DIAGNOSTICSUI
+	ConfigValue<int32> m_EnableDiagnosticsUI;
+	#endif
+
+	#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DUALWIFI
+	ConfigValue<int32> m_DualWifi_Enable;
+	#endif
+
 	ConfigValue<int32> m_LogLevel_AckRTT;
 	ConfigValue<int32> m_LogLevel_PacketDecode;
 	ConfigValue<int32> m_LogLevel_Message;
@@ -835,6 +906,10 @@ extern GlobalConfigValue<int32> g_Config_LogLevel_SDRRelayPings;
 extern GlobalConfigValue<std::string> g_Config_SDRClient_ForceRelayCluster;
 extern GlobalConfigValue<std::string> g_Config_SDRClient_ForceProxyAddr;
 extern GlobalConfigValue<std::string> g_Config_SDRClient_FakeClusterPing;
+#endif
+
+#ifdef STEAMNETWORKINGSOCKETS_ENABLE_DIAGNOSTICSUI
+extern ConnectionConfigDefaultValue<int32> g_ConfigDefault_EnableDiagnosticsUI;
 #endif
 
 #ifdef STEAMNETWORKINGSOCKETS_ENABLE_ICE
@@ -1077,11 +1152,34 @@ inline int index_of( const V &vec, const typename vstd::LikeStdVectorTraits<V>::
 
 namespace vstd
 {
+	// Polyfill for is_trivially_copyable on older GCC.
+	#if defined( __GNUC__ ) && __GNUC__ < 5
+		template <typename T> struct is_trivially_copyable
+		{
+			static constexpr bool value = __has_trivial_copy(T);
+		};
+	#else
+		using std::is_trivially_copyable;
+	#endif
+
+	// It's 2021 and the C++ language doesn't have a way for you to say,
+	// "My type can be safely memmoved".  We also don't have a decent
+	// associate array class.  But we do have concepts and a bunch of
+	// other crap nobody cares about.
+	template <typename T> struct is_relocatable : is_trivially_copyable<T> {};
+
+	// If they tell us it's OK to relocate the type, then ignore GCC warnings
+	#ifdef __GNUC__
+		#pragma GCC diagnostic push
+		#if __GNUC__ >= 8
+			#pragma GCC diagnostic ignored "-Wclass-memaccess"
+		#endif
+	#endif
 
 	template <typename T>
 	void copy_construct_elements( T *dest, const T *src, size_t n )
 	{
-		if ( std::is_trivial<T>::value )
+		if ( is_trivially_copyable<T>::value )
 		{
 			memcpy( dest, src, n*sizeof(T) );
 		}
@@ -1096,7 +1194,7 @@ namespace vstd
 	template <typename T>
 	void move_construct_elements( T *dest, T *src, size_t n )
 	{
-		if ( std::is_trivial<T>::value )
+		if ( is_relocatable<T>::value )
 		{
 			memcpy( dest, src, n*sizeof(T) );
 		}
@@ -1230,7 +1328,7 @@ namespace vstd
 		assert( begin() <= it );
 		assert( it < e );
 
-		if ( std::is_trivial<T>::value )
+		if ( is_relocatable<T>::value )
 		{
 			memmove( it, it+1, (char*)e - (char*)(it+1) );
 		}
@@ -1253,7 +1351,7 @@ namespace vstd
 		if ( n <= capacity_ )
 			return;
 		assert( capacity_ >= size_ );
-		if ( std::is_trivial<T>::value && dynamic_ )
+		if ( is_relocatable<T>::value && dynamic_ )
 		{
 			dynamic_ = (T*)realloc( dynamic_, n * sizeof(T) );
 		}
@@ -1283,7 +1381,7 @@ namespace vstd
 		if ( n > size_ )
 		{
 			reserve( n );
-			T *b = begin();
+			T *b = begin() + size_;
 			while ( size_ < n )
 			{
 				Construct<T>( b ); // NOTE: Does not use value initializer, so PODs are *not* initialized
@@ -1353,7 +1451,7 @@ namespace vstd
 			clear();
 		}
 		assert( capacity_ >= n );
-		if ( std::is_trivial<T>::value )
+		if ( is_trivially_copyable<T>::value )
 		{
 			// Just blast them over, and don't bother with the leftovers
 			memcpy( begin(), srcBegin, n*sizeof(T) );
@@ -1379,6 +1477,13 @@ namespace vstd
 
 	template <typename T,int N>
 	struct LikeStdVectorTraits< small_vector<T,N> > { enum { yes = 1 }; typedef T ElemType; };
+
+	// small_vectors are relocatable,  if T is relocatable
+	template <typename T,int N> struct is_relocatable< small_vector<T,N> > : is_relocatable<T> {};
+
+	#ifdef __GNUC__
+		#pragma GCC diagnostic pop
+	#endif
 
 } // namespace vstd
 

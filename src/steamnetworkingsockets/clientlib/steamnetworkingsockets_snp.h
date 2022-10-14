@@ -3,6 +3,7 @@
 #pragma once
 
 #include "../steamnetworkingsockets_internal.h"
+#include <tier1/utllinkedlist.h>
 #include <vector>
 #include <map>
 #include <set>
@@ -71,6 +72,16 @@ class CSteamNetworkConnectionBase;
 class CConnectionTransport;
 struct SteamNetworkingMessageQueue;
 
+/// We implement priority groups using Weighted Fair Queueing.
+/// https://en.wikipedia.org/wiki/Weighted_fair_queueing
+/// The idea is to assign a virtual "timestamp" when the message
+/// would finish sending, and each time we have an opportunity to
+/// send, we select the group with the earliest finish time.
+/// Virtual time is essentially an arbitrary counter that increases
+/// at a fixed rate per outbound byte sent.
+typedef int64 VirtualSendTime;
+static constexpr VirtualSendTime k_virtSendTime_Infinite = std::numeric_limits<VirtualSendTime>::max();
+
 /// Actual implementation of SteamNetworkingMessage_t, which is the API
 /// visible type.  Has extra fields needed to put the message into intrusive
 /// linked lists.
@@ -78,7 +89,6 @@ class CSteamNetworkingMessage : public SteamNetworkingMessage_t
 {
 public:
 	STEAMNETWORKINGSOCKETS_DECLARE_CLASS_OPERATOR_NEW
-	static CSteamNetworkingMessage *New( CSteamNetworkConnectionBase *pParent, uint32 cbSize, int64 nMsgNum, int nFlags, SteamNetworkingMicroseconds usecNow );
 	static CSteamNetworkingMessage *New( uint32 cbSize );
 	static void DefaultFreeData( SteamNetworkingMessage_t *pMsg );
 
@@ -90,12 +100,17 @@ public:
 	inline SteamNetworkingMicroseconds SNPSend_UsecNagle() const { return m_usecTimeReceived; }
 	inline void SNPSend_SetUsecNagle( SteamNetworkingMicroseconds x ) { m_usecTimeReceived = x; }
 
+	/// "Virtual finish time".  This is the "virtual time" when we
+	/// wound have finished sending the current message, if any,
+	/// if all priority groups were busy and we got our proportionate
+	/// share.
+	inline VirtualSendTime SNPSend_VirtualFinishTime() const { return m_nConnUserData; }
+	inline void SNPSend_SetVirtualFinishTime( VirtualSendTime x ) { m_nConnUserData = x; }
+
 	/// Offset in reliable stream of the header byte.  0 if we're not reliable.
-	inline int64 SNPSend_ReliableStreamPos() const { return m_nConnUserData; }
-	inline void SNPSend_SetReliableStreamPos( int64 x ) { m_nConnUserData = x; }
 	inline int SNPSend_ReliableStreamSize() const
 	{
-		DbgAssert( m_nFlags & k_nSteamNetworkingSend_Reliable && m_nConnUserData > 0 && m_cbSNPSendReliableHeader > 0 && m_cbSize >= m_cbSNPSendReliableHeader );
+		DbgAssert( m_nFlags & k_nSteamNetworkingSend_Reliable && m_nConnUserData > 0 && ReliableSendInfo().m_cbHdr > 0 && m_cbSize >= ReliableSendInfo().m_cbHdr );
 		return m_cbSize;
 	}
 
@@ -103,19 +118,39 @@ public:
 	{
 		if ( m_nFlags & k_nSteamNetworkingSend_Reliable )
 		{
-			DbgAssert( m_nConnUserData > 0 && m_cbSNPSendReliableHeader > 0 && m_cbSize >= m_cbSNPSendReliableHeader );
+			DbgAssert( ((ReliableSendInfo_t *)&m_identityPeer)->m_nStreamPos > 0 && m_cbSize >= ((ReliableSendInfo_t *)&m_identityPeer)->m_cbHdr );
 			return true;
 		}
-		DbgAssert( m_nConnUserData == 0 && m_cbSNPSendReliableHeader == 0 );
 		return false;
 	}
 
-	// Reliable stream header
-	int m_cbSNPSendReliableHeader;
-	byte *SNPSend_ReliableHeader()
+	inline int64 SNPSend_ReliableStreamPos() const { Assert( m_nFlags & k_nSteamNetworkingSend_Reliable ); return ReliableSendInfo().m_nStreamPos; }
+	inline void SNPSend_SetReliableStreamPos( int64 x ) { Assert( m_nFlags & k_nSteamNetworkingSend_Reliable ); ReliableSendInfo().m_nStreamPos = x; }
+
+	// Working data for reliable messages.
+	struct ReliableSendInfo_t
 	{
-		// !KLUDGE! Reuse the peer identity to hold the reliable header
-		return (byte*)&m_identityPeer;
+		int64 m_nStreamPos;
+
+		// Number of reliable segments that refer to this message.
+		// Also while we are in the queue waiting to be sent the queue holds a reference
+		int m_nSentReliableSegRefCount;
+		int m_cbHdr;
+		byte m_hdr[16];
+	};
+	const ReliableSendInfo_t &ReliableSendInfo() const
+	{
+		DbgAssert( m_nFlags & k_nSteamNetworkingSend_Reliable );
+		// !KLUDGE! Reuse the identity field.  We don't actually put this in a union because
+		//          this is internal stuff that doesn't need to be exposed in the API
+		COMPILE_TIME_ASSERT( sizeof(m_identityPeer) >= sizeof(ReliableSendInfo_t) );
+		return *(ReliableSendInfo_t *)&m_identityPeer;
+	}
+	ReliableSendInfo_t &ReliableSendInfo()
+	{
+		DbgAssert( m_nFlags & k_nSteamNetworkingSend_Reliable );
+		COMPILE_TIME_ASSERT( sizeof(m_identityPeer) >= sizeof(ReliableSendInfo_t) );
+		return *(ReliableSendInfo_t *)&m_identityPeer;
 	}
 
 	/// Remove it from queues
@@ -176,38 +211,42 @@ struct SteamNetworkingMessageQueue
 	void AssertLockHeld() const;
 };
 
-/// Maximum number of packets we will send in one Think() call.
-const int k_nMaxPacketsPerThink = 16;
-
 /// Max number of tokens we are allowed to store up in reserve, for a burst.
 const float k_flSendRateBurstOverageAllowance = k_cbSteamNetworkingSocketsMaxEncryptedPayloadSend;
 
-struct SNPRange_t
+/// Describe a reliable segment that was placed in a packet
+#pragma pack(push, 1)
+struct SNPSendReliableSegment_t
 {
-	/// Byte or sequence number range
-	int64 m_nBegin;
-	int64 m_nEnd; // STL-style.  It's one past the end
 
-	inline int64 length() const
-	{
-		// In general, allow zero-length ranges, but not negative ones
-		Assert( m_nEnd >= m_nBegin );
-		return m_nEnd - m_nBegin;
-	}
+	/// Message that backs the segment.  Although our wire format can accommodate
+	/// a segment that spans messages, in our internal bookkeeping we do not do this.
+	/// All segments we track come from a single message.
+	CSteamNetworkingMessage *m_pMsg;
 
-	/// Strict comparison function.  This is used in situations where
-	/// ranges must not overlap, AND we also never search for
-	/// a range that might overlap.
-	struct NonOverlappingLess
-	{
-		inline bool operator ()(const SNPRange_t &l, const SNPRange_t &r ) const
-		{
-			if ( l.m_nBegin < r.m_nBegin ) return true;
-			AssertMsg( l.m_nBegin > r.m_nBegin || l.m_nEnd == r.m_nEnd, "Ranges should not overlap in this map!" );
-			return false;
-		}
-	};
+	/// Offset from the start of the message's position in the reliable stream
+	/// where this segment begins
+	int m_nOffset;
+
+	/// Size of the segment
+	int m_cbSize;
+
+	/// Number of references to this
+	int16 m_nRefCount;
+
+	/// Status of this segment.  Either one of the k_nStatus_xxx constants
+	/// below, or we are scheduled for retry, in which case it is a handle into
+	/// m_listReadyRetryReliableRange
+	uint16 m_hStatusOrRetry;
+
+	static constexpr uint16 k_nStatus_InFlight = 0xffff;
+	static constexpr uint16 k_nStatus_Acked = 0xfffe;
+
+	int64 begin() const { return m_pMsg->SNPSend_ReliableStreamPos() + m_nOffset; }
+
+	// CUtlLinkedList will use two words here for the prev/next links
 };
+#pragma pack(pop)
 
 /// A packet that has been sent but we don't yet know if was received
 /// or dropped.  These are kept in an ordered map keyed by packet number.
@@ -231,67 +270,10 @@ struct SNPInFlightPacket_t
 	/// Transport used to send
 	CConnectionTransport *m_pTransport;
 
-	/// List of reliable segments.  Ignoring retransmission,
-	/// there really is no reason why we we would need to have
-	/// more than 1 in a packet, even if there are multiple
-	/// reliable messages.  If we need to retry, we might
-	/// be fragmented.  But usually it will only be a few.
-	vstd::small_vector<SNPRange_t,1> m_vecReliableSegments;
-};
-
-struct SSNPSendMessageList : public SteamNetworkingMessageQueue
-{
-
-	/// Unlink the message at the head, if any and return it.
-	/// Unlike STL pop_front, this will return nullptr if the
-	/// list is empty
-	CSteamNetworkingMessage *pop_front()
-	{
-		CSteamNetworkingMessage *pResult = m_pFirst;
-		if ( pResult )
-		{
-			Assert( m_pLast );
-			Assert( pResult->m_links.m_pQueue == this );
-			Assert( pResult->m_links.m_pPrev == nullptr );
-			m_pFirst = pResult->m_links.m_pNext;
-			if ( m_pFirst )
-			{
-				Assert( m_pFirst->m_links.m_pPrev == pResult );
-				Assert( m_pFirst->m_nMessageNumber > pResult->m_nMessageNumber );
-				m_pFirst->m_links.m_pPrev = nullptr;
-			}
-			else
-			{
-				Assert( m_pLast == pResult );
-				m_pLast = nullptr;
-			}
-			pResult->m_links.m_pQueue = nullptr;
-			pResult->m_links.m_pNext = nullptr;
-		}
-		return pResult;
-	}
-
-	/// Optimized insertion when we know it goes at the end
-	void push_back( CSteamNetworkingMessage *pMsg )
-	{
-		if ( m_pFirst == nullptr )
-		{
-			Assert( m_pLast == nullptr );
-			m_pFirst = pMsg;
-		}
-		else
-		{
-			// Messages are always kept in message number order
-			Assert( pMsg->m_nMessageNumber > m_pLast->m_nMessageNumber );
-			Assert( m_pLast->m_links.m_pNext == nullptr );
-			m_pLast->m_links.m_pNext = pMsg;
-		}
-		pMsg->m_links.m_pQueue = this;
-		pMsg->m_links.m_pNext = nullptr;
-		pMsg->m_links.m_pPrev = m_pLast;
-		m_pLast = pMsg;
-	}
-
+	/// Reliable segments that were sent.  We might have multiple of
+	/// these either due to multiple lanes or retransmission.
+	/// Each entry is a handle into m_listSentReliableSegments
+	vstd::small_vector<uint16,2> m_vecReliableSegments;
 };
 
 /// Info used by a sender to estimate the available bandwidth
@@ -335,6 +317,7 @@ struct SSendRateData
 	}
 };
 
+/// Track the state of a host, in its role as a sender
 struct SSNPSenderState
 {
 	SSNPSenderState();
@@ -342,6 +325,75 @@ struct SSNPSenderState
 		Shutdown();
 	}
 	void Shutdown();
+
+	/// Constant conversion factor for bytes -> virtual time.  This
+	/// represents the amount of virtual time that will elapse when
+	/// ALL lanes within a given priority class send one byte.  The
+	/// large value is used to avoid precision loss when dealing
+	/// in integral values.
+	static constexpr float k_flVirtalTimePerByteAllLanes = 65536.0f;
+
+	/// Each priority classes has its own virtual timer for weighted fair queuing
+	struct PriorityClass
+	{
+
+		/// Current virtual timestamp.  This is used when a message
+		/// is queued to calculate its virtual finish time.
+		VirtualSendTime m_virtTimeCurrent = 0;
+
+		/// Indices of lanes that belong to this priority class
+		vstd::small_vector<int,4<STEAMNETWORKINGSOCKETS_MAX_LANES ? 4 : STEAMNETWORKINGSOCKETS_MAX_LANES> m_vecLaneIdx;
+	};
+	vstd::small_vector<PriorityClass,4<STEAMNETWORKINGSOCKETS_MAX_LANES ? 4 : STEAMNETWORKINGSOCKETS_MAX_LANES> m_vecPriorityClasses;
+
+	/// Info we track for each lane
+	struct Lane
+	{
+		inline ~Lane() { Assert( m_messagesQueued.empty() ); }
+
+		/// List of messages for this priority group that we have not yet
+		/// finished putting on the wire the first time. The Nagle timer may
+		/// be active on one or more, but if so, it is only on messages at the
+		/// END of the list.  The first message may have been partially sent.
+		///
+		/// We use the CSteamNetworkingMessage::m_linksSecondaryQueue
+		SteamNetworkingMessageQueue m_messagesQueued;
+
+		/// Current "write" position in the reliable stream for this lane.
+		/// The next reliable message will begin at this address.
+		int64 m_nReliableStreamNextSendPos = 1;
+
+		/// Last message number we sent on this channel
+		int64 m_nLastSendMsgNumReliable = 0;
+
+		// Current message number, we ++ when adding a message
+		int64 m_nLastSentMsgNum = 0; // Will increment to 1 with first message
+
+		/// How many bytes into the first message in the queue have we put on the wire?
+		int m_cbCurrentSendMessageSent = 0;
+
+		// Amount of buffered data in this lane
+		int m_cbPendingUnreliable = 0;
+		int m_cbPendingReliable = 0;
+		int m_cbSentUnackedReliable = 0;
+		inline int PendingBytesTotal() const { return m_cbPendingUnreliable + m_cbPendingReliable; }
+
+		/// Multiplier used to calculate virtual finish time.
+		float m_flBytesToVirtualTime;
+
+		/// Index of the priority class we belong to.  Priority classes
+		/// are sorted, and so a lower m_idxPriorityClass means lower priority.
+		uint16 m_idxPriorityClass;
+
+		/// Weight value they used.  This is only meaningful
+		/// relative to the other lanes with the same priority class
+		uint16 m_nWeight;
+	};
+	#if STEAMNETWORKINGSOCKETS_MAX_LANES > 4
+		std_vector<Lane> m_vecLanes;
+	#else
+		vstd::small_vector<Lane,STEAMNETWORKINGSOCKETS_MAX_LANES> m_vecLanes;
+	#endif
 
 	/// Nagle timer on all pending messages
 	void ClearNagleTimers()
@@ -354,26 +406,15 @@ struct SSNPSenderState
 		}
 	}
 
-	// Current message number, we ++ when adding a message
-	int64 m_nReliableStreamPos = 1;
-	int64 m_nLastSentMsgNum = 0; // Will increment to 1 with first message
-	int64 m_nLastSendMsgNumReliable = 0;
-
-	/// List of messages that we have not yet finished putting on the wire the first time.
-	/// The Nagle timer may be active on one or more, but if so, it is only on messages
-	/// at the END of the list.  The first message may be partially sent.
-	SSNPSendMessageList m_messagesQueued;
-
-	/// How many bytes into the first message in the queue have we put on the wire?
-	int m_cbCurrentSendMessageSent = 0;
+	/// Queue of all messages (from all lanes), that we have not yet
+	/// finished putting on the wire the first time. The Nagle timer may be active
+	/// on one or more, but if so, it is only on messages at the END of the list.
+	/// The first message in each lane may have been partially sent
+	SteamNetworkingMessageQueue m_messagesQueued;
 
 	/// List of reliable messages that have been fully placed on the wire at least once,
-	/// but we're hanging onto because of the potential need to retry.  (Note that if we get
-	/// packet loss, it's possible that we hang onto a message even after it's been fully
-	/// acked, because a prior message is still needed.  We always operate on this list
-	/// like a queue, rather than seeking into the middle of the list and removing messages
-	/// as soon as they are no longer needed.)
-	SSNPSendMessageList m_unackedReliableMessages;
+	/// but we're hanging onto because of the potential need to retry.
+	SteamNetworkingMessageQueue m_unackedReliableMessages;
 
 	// Buffered data counters.  See SteamNetworkingQuickConnectionStatus for more info
 	int m_cbPendingUnreliable = 0;
@@ -395,35 +436,45 @@ struct SSNPSenderState
 	/// if we don't have any in flight packets that we are waiting on.
 	std_map<int64,SNPInFlightPacket_t>::iterator m_itNextInFlightPacketToTimeout;
 
-	/// Ordered list of reliable ranges that we have recently sent
-	/// in a packet.  These should be non-overlapping, and furthermore
-	/// should not overlap with with any range in m_listReadyReliableRange
-	///
-	/// The "value" portion of the map is the message that has the first bit of
-	/// reliable data we need for this message
-	std_map<SNPRange_t,CSteamNetworkingMessage*,SNPRange_t::NonOverlappingLess> m_listInFlightReliableRange;
+	/// Reliable segments that have been sent at least once and either
+	/// have not yet been acked, or have references by in-flight packets
+	CUtlLinkedList<SNPSendReliableSegment_t, uint16> m_listSentReliableSegments;
 
-	/// Ordered list of ranges that have been put on the wire,
-	/// but have been detected as dropped, and now need to be retried.
-	std_map<SNPRange_t,CSteamNetworkingMessage*,SNPRange_t::NonOverlappingLess> m_listReadyRetryReliableRange;
+	/// Queue of reliable ranges that have been scheduled for retry.
+	/// Each entry is a handle into m_listSentReliableSegments
+	CUtlLinkedList<uint16,uint16> m_listReadyRetryReliableRange;
+
+	/// Called when we discard a packet after having nacked it
+	void RemoveRefCountReliableSegment( uint16 hSeg );
+
+	/// Called when a reliable segment is scheduled for retry, and we need to un-schedule it
+	void RemoveReliableSegmentFromRetryList( uint16 hSeg, uint16 nNewStatus )
+	{
+		SNPSendReliableSegment_t &seg = m_listSentReliableSegments[ hSeg ];
+		DbgAssert( seg.m_hStatusOrRetry < 0xfffe );
+		DbgAssert( m_listReadyRetryReliableRange[ seg.m_hStatusOrRetry ] == hSeg );
+		m_listReadyRetryReliableRange.Remove( seg.m_hStatusOrRetry );
+		seg.m_hStatusOrRetry = nNewStatus;
+	}
 
 	/// Oldest packet sequence number that we are still asking peer
 	/// to send acks for.
 	int64 m_nMinPktWaitingOnAck = 0;
 
-	// Remove messages from m_unackedReliableMessages that have been fully acked.
-	void RemoveAckedReliableMessageFromUnackedList();
-
 	/// Check invariants in debug.
 	#if STEAMNETWORKINGSOCKETS_SNP_PARANOIA == 0 
 		inline void DebugCheckInFlightPacketMap() const {}
+		inline void DebugCheckReliable() const {}
 	#else
 		void DebugCheckInFlightPacketMap() const;
+		void DebugCheckReliable() const;
 	#endif
 	#if STEAMNETWORKINGSOCKETS_SNP_PARANOIA > 1
 		inline void MaybeCheckInFlightPacketMap() const { DebugCheckInFlightPacketMap(); }
+		inline void MaybeCheckReliable() const { DebugCheckReliable(); }
 	#else
 		inline void MaybeCheckInFlightPacketMap() const {}
+		inline void MaybeCheckReliable() const {}
 	#endif
 };
 
@@ -463,33 +514,45 @@ struct SSNPReceiverState
 	}
 	void Shutdown();
 
-	/// Unreliable message segments that we have received.  When an unreliable message
-	/// needs to be fragmented, we store the pieces here.  NOTE: it might be more efficient
-	/// to use a simpler container, with worse O(), since this should ordinarily be
-	/// a pretty small list.
-	std_map<SSNPRecvUnreliableSegmentKey,SSNPRecvUnreliableSegmentData> m_mapUnreliableSegments;
+	/// Each lane has its own reliable stream
+	struct Lane
+	{
 
-	/// Stream position of the first byte in m_bufReliableData.  Remember that the first byte
-	/// in the reliable stream is actually at position 1, not 0
-	int64 m_nReliableStreamPos = 1;
+		/// Unreliable message segments that we have received.  When an unreliable message
+		/// needs to be fragmented, we store the pieces here.  NOTE: it might be more efficient
+		/// to use a simpler container, with worse O(), since this should ordinarily be
+		/// a pretty small list.
+		std_map<SSNPRecvUnreliableSegmentKey,SSNPRecvUnreliableSegmentData> m_mapUnreliableSegments;
 
-	/// The highest message number we have seen so far.
-	int64 m_nHighestSeenMsgNum = 0;
+		/// The highest message number we have seen so far.
+		int64 m_nHighestSeenMsgNum = 0;
 
-	/// The message number of the most recently received reliable message
-	int64 m_nLastRecvReliableMsgNum = 0;
+		/// Stream position of the first byte in m_bufReliableData.  Remember that the first byte
+		/// in the reliable stream is actually at position 1, not 0
+		int64 m_nReliableStreamPos = 1;
 
-	/// Reliable data stream that we have received.  This might have gaps in it!
-	std_vector<byte> m_bufReliableStream;
+		/// The message number of the most recently received reliable message
+		int64 m_nLastRecvReliableMsgNum = 0;
 
-	/// Gaps in the reliable data.  These are created when we receive reliable data that
-	/// is beyond what we expect next.  Since these must never overlap, we store them
-	/// using begin as the key and end as the value.
-	///
-	/// !SPEED! We should probably use a small fixed-sized, sorted vector here,
-	/// since in most cases the list will be small, and the cost of dynamic memory
-	/// allocation will be way worse than O(n) insertion/removal.
-	std_map<int64,int64> m_mapReliableStreamGaps;
+		/// Reliable data stream that we have received but not yet
+		/// parsed as reliable messages and dispatched them.  This
+		/// might have gaps in it!
+		std_vector<byte> m_bufReliableStream;
+
+		/// Gaps in the reliable data.  These are created when we receive reliable data that
+		/// is beyond what we expect next.  Since these must never overlap, we store them
+		/// using begin as the key and end as the value.
+		///
+		/// !SPEED! We should probably use a small fixed-sized, sorted vector here,
+		/// since in most cases the list will be small, and the cost of dynamic memory
+		/// allocation will be way worse than O(n) insertion/removal.
+		std_map<int64,int64> m_mapReliableStreamGaps;
+	};
+	#if STEAMNETWORKINGSOCKETS_MAX_LANES > 4
+		std_vector<Lane> m_vecLanes;
+	#else
+		vstd::small_vector<Lane,STEAMNETWORKINGSOCKETS_MAX_LANES> m_vecLanes;
+	#endif
 
 	/// List of gaps in the packet sequence numbers we have received.
 	/// Since these must never overlap, we store them using begin as the
@@ -574,5 +637,127 @@ struct SSNPReceiverState
 	int64 m_nMessagesRecvReliable = 0;
 	int64 m_nMessagesRecvUnreliable = 0;
 };
+
+inline void CSteamNetworkingMessage::LinkBefore( CSteamNetworkingMessage *pSuccessor, CSteamNetworkingMessage::Links CSteamNetworkingMessage::*pMbrLinks, SteamNetworkingMessageQueue *pQueue )
+{
+	// No successor?
+	if ( !pSuccessor )
+	{
+		LinkToQueueTail( pMbrLinks, pQueue );
+		return;
+	}
+
+	// Check lock.  We must not already be in a queue
+	pQueue->AssertLockHeld();
+	Assert( (this->*pMbrLinks).m_pQueue == nullptr );
+	Assert( (this->*pMbrLinks).m_pPrev == nullptr );
+	Assert( (this->*pMbrLinks).m_pNext == nullptr );
+
+	// The queue cannot be empty, since it at least contains the successor
+	Assert( pQueue->m_pFirst );
+	Assert( pQueue->m_pLast );
+	Assert( (pSuccessor->*pMbrLinks).m_pQueue == pQueue );
+
+	CSteamNetworkingMessage *pPrev = (pSuccessor->*pMbrLinks).m_pPrev;
+	if ( pPrev )
+	{
+		Assert( pQueue->m_pFirst != pSuccessor );
+		Assert( (pPrev->*pMbrLinks).m_pNext == pSuccessor );
+		Assert( (pPrev->*pMbrLinks).m_pQueue == pQueue );
+
+		(pPrev->*pMbrLinks).m_pNext = this;
+		(this->*pMbrLinks).m_pPrev = pPrev;
+	}
+	else
+	{
+		Assert( pQueue->m_pFirst == pSuccessor );
+		pQueue->m_pFirst = this;
+		(this->*pMbrLinks).m_pPrev = nullptr; // Should already be null, but let's slam it again anyway
+	}
+
+	// Finish up
+	(this->*pMbrLinks).m_pQueue = pQueue;
+	(this->*pMbrLinks).m_pNext = pSuccessor;
+	(pSuccessor->*pMbrLinks).m_pPrev = this;
+}
+
+inline void CSteamNetworkingMessage::LinkToQueueTail( CSteamNetworkingMessage::Links CSteamNetworkingMessage::*pMbrLinks, SteamNetworkingMessageQueue *pQueue )
+{
+	// Check lock.  We must not already be in a queue
+	pQueue->AssertLockHeld();
+	Assert( (this->*pMbrLinks).m_pQueue == nullptr );
+	Assert( (this->*pMbrLinks).m_pPrev == nullptr );
+	Assert( (this->*pMbrLinks).m_pNext == nullptr );
+
+	// Locate previous link that should point to us.
+	// Does the queue have anything in it?
+	if ( pQueue->m_pLast )
+	{
+		Assert( pQueue->m_pFirst );
+		Assert( !(pQueue->m_pLast->*pMbrLinks).m_pNext );
+		(pQueue->m_pLast->*pMbrLinks).m_pNext = this;
+	}
+	else
+	{
+		Assert( !pQueue->m_pFirst );
+		pQueue->m_pFirst = this;
+	}
+
+	// Link back to the previous guy, if any
+	(this->*pMbrLinks).m_pPrev = pQueue->m_pLast;
+
+	// We're last in the list, nobody after us
+	(this->*pMbrLinks).m_pNext = nullptr;
+	pQueue->m_pLast = this;
+
+	// Remember what queue we're in
+	(this->*pMbrLinks).m_pQueue = pQueue;
+}
+
+inline void CSteamNetworkingMessage::UnlinkFromQueue( CSteamNetworkingMessage::Links CSteamNetworkingMessage::*pMbrLinks )
+{
+	Links &links = this->*pMbrLinks;
+
+	// Not in a queue?
+	if ( links.m_pQueue == nullptr )
+	{
+		Assert( links.m_pPrev == nullptr );
+		Assert( links.m_pNext == nullptr );
+		return;
+	}
+	SteamNetworkingMessageQueue &q = *links.m_pQueue;
+	q.AssertLockHeld();
+
+	// Unlink from previous
+	if ( links.m_pPrev )
+	{
+		Assert( q.m_pFirst != this );
+		Assert( (links.m_pPrev->*pMbrLinks).m_pNext == this );
+		(links.m_pPrev->*pMbrLinks).m_pNext = links.m_pNext;
+	}
+	else
+	{
+		Assert( q.m_pFirst == this );
+		q.m_pFirst = links.m_pNext;
+	}
+
+	// Unlink from next
+	if ( links.m_pNext )
+	{
+		Assert( q.m_pLast != this );
+		Assert( (links.m_pNext->*pMbrLinks).m_pPrev == this );
+		(links.m_pNext->*pMbrLinks).m_pPrev = links.m_pPrev;
+	}
+	else
+	{
+		Assert( q.m_pLast == this );
+		q.m_pLast = links.m_pPrev;
+	}
+
+	// Clear links
+	links.m_pQueue = nullptr;
+	links.m_pPrev = nullptr;
+	links.m_pNext = nullptr;
+}
 
 } // SteamNetworkingSocketsLib
