@@ -12,15 +12,15 @@ cd buildLinux
 
 // Release
 
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS="-fpic -O2" -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
+sudo cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS="-fpic -O2" -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
 
 // Debug
 
-cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS="-fpic -O2" -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
+sudo cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS="-fpic -O2" -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
 
 // compile
 
-cmake --build . --parallel 10
+sudo cmake --build . --parallel 10
 
 // install
 
