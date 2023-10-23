@@ -5,6 +5,9 @@ cd protobuf
 
 // remove some untracked files before below command
 
+rm -r abseil-cpp
+rm -r jsoncpp
+
 git checkout tags/v3.21.6 -b v3.21.6
 
 mkdir buildLinux
