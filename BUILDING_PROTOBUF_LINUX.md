@@ -13,7 +13,7 @@ rm -r jsoncpp
 
 cd ..
 
-git checkout tags/v3.21.6 -b v3.21.6
+git checkout tags/v3.21.6
 
 mkdir buildLinux
 cd buildLinux
