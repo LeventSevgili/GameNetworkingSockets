@@ -5,9 +5,13 @@ cd protobuf
 
 // remove some untracked files before below command
 
+cd third_party
+
 rm -r abseil-cpp
 
 rm -r jsoncpp
+
+cd ..
 
 git checkout tags/v3.21.6 -b v3.21.6
 
