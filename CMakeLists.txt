@@ -103,7 +103,28 @@ if (USE_CRYPTO STREQUAL "OpenSSL")
 		set(OPENSSL_MSVC_STATIC_RT ${MSVC_CRT_STATIC})
 	endif()
 
+if (ANDROID)
+
+message( "Building for Android... ")
+set(OPENSSL_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/../openssl/include)
+set(OPENSSL_ROOT_DIR ${PROJECT_SOURCE_DIR}/../openssl)
+set(OPENSSL_CRYPTO_LIBRARY ${PROJECT_SOURCE_DIR}/../openssl/libcrypto.so)
+set(Protobuf_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/../protobuf/src)
+set(Protobuf_LIBRARIES ${PROJECT_SOURCE_DIR}/../protobuf/buildAndroid/libprotobuf.a)
+set(Protobuf_DIR ${PROJECT_SOURCE_DIR}/../protobuf/buildAndroid/lib/cmake/protobuf)
+include_directories(${Protobuf_INCLUDE_DIR})
+link_directories(${Protobuf_LIBRARIES})
+list(APPEND CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/../protobuf)
+list(APPEND CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/../protobuf/buildAndroid)
+
+#strip file
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
+
+endif (ANDROID)
+
 	find_package(OpenSSL REQUIRED)
+
 	message( STATUS "OPENSSL_INCLUDE_DIR = ${OPENSSL_INCLUDE_DIR}" )
 
 	# Ensure the OpenSSL version is recent enough. We need a bunch of EVP
@@ -114,7 +135,14 @@ if (USE_CRYPTO STREQUAL "OpenSSL")
 		if(WIN32 AND OPENSSL_USE_STATIC_LIBS)
 			list(APPEND CMAKE_REQUIRED_LIBRARIES ws2_32 crypt32)
 		endif()
-		check_symbol_exists(EVP_MD_CTX_free openssl/evp.h OPENSSL_NEW_ENOUGH)
+
+		#we are pretty sure we have OPENSSL_NEW_ENOUGH version for Android,
+		#otherwise check_symbol_exists finds it old for Android, dunno why.
+		if (NOT ANDROID)
+			check_symbol_exists(EVP_MD_CTX_free openssl/evp.h OPENSSL_NEW_ENOUGH)
+		else()
+			set(OPENSSL_NEW_ENOUGH TRUE)
+		endif ()
 		if (NOT OPENSSL_NEW_ENOUGH)
 			message(FATAL_ERROR "Cannot find EVP_MD_CTX_free in OpenSSL headers/libs for the target architecture.  Check that you're using OpenSSL 1.1.0 or later.")
 		endif()
@@ -189,6 +217,8 @@ function(set_target_common_gns_properties TGT)
 				)
 			target_compile_options(${TGT} PRIVATE -fno-stack-protector)
 		endif()
+	elseif(CMAKE_SYSTEM_NAME MATCHES Android)
+		target_compile_definitions(${TGT} PUBLIC ANDROID)
 	else()
 		message(FATAL_ERROR "Could not identify your target operating system")
 	endif()
