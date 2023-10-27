@@ -170,18 +170,46 @@ protobuf_generate_cpp(GNS_COMMON_PROTO_SRCS GNS_COMMON_PROTO_HDRS ${GNS_COMMON_P
 protobuf_generate_cpp(GNS_CLIENTLIB_PROTO_SRCS GNS_CLIENTLIB_PROTO_HDRS ${GNS_CLIENTLIB_PROTOS})
 
 function(gns_set_target_protobuf_properties TGT )
-	target_link_libraries(${TGT} PUBLIC
+
+if (ANDROID)
+
+add_definitions ( -DPOSIX -DANDROID -DNDEBUG -DGOOGLE_PROTOBUF_NO_RTTI -DSTEAMNETWORKINGSOCKETS_FOREXPORT -DENABLE_OPENSSLCONNECTION -DVALVE_CRYPTO_25519_OPENSSL -DVALVE_CRYPTO_ENABLE_25519
+-DCLANG_SUPPORT_DYN_ANNOTATION -DCMAKE_INTDIR="Release" -DGameNetworkingSockets_EXPORTS)
+
+set_target_properties(${TGT} PROPERTIES OUTPUT_NAME "GameNetworkingSocketsAndroid")
+
+target_link_libraries(${TGT} PUBLIC
+		${Protobuf_LIBRARIES}
+		Threads::Threads
+		log
+		)
+
+else()
+
+target_link_libraries(${TGT} PUBLIC
 		protobuf::libprotobuf
 		Threads::Threads
 		)
+
+endif(ANDROID)
+
 endfunction()
 
 # Set the target properties (sources, link libs, defines) based on crypto settings
 function(gns_set_target_crypto_properties TGT)
 	if(USE_CRYPTO STREQUAL "OpenSSL" OR USE_CRYPTO25519 STREQUAL "OpenSSL")
-		target_link_libraries(${TGT} PUBLIC
+
+		if (ANDROID)
+			include_directories(${PROJECT_SOURCE_DIR}/../openssl/include)
+			target_link_libraries(${TGT} PUBLIC
+			${PROJECT_SOURCE_DIR}/../openssl/libcrypto.a
+		)
+		else()
+			target_link_libraries(${TGT} PUBLIC
 			OpenSSL::Crypto
-			)
+		)
+		endif (ANDROID)
+
 		if(WIN32 AND OPENSSL_USE_STATIC_LIBS)
 			target_link_libraries(${TGT} PUBLIC
 				ws2_32
@@ -314,6 +342,8 @@ macro(set_clientlib_target_properties GNS_TARGET)
 		if(USE_CRYPTO STREQUAL "BCrypt")
 			target_link_libraries(${GNS_TARGET} PUBLIC bcrypt)
 		endif()
+	elseif(CMAKE_SYSTEM_NAME MATCHES Android)
+
 	else()
 		message(FATAL_ERROR "Could not identify your target operating system")
 	endif()
