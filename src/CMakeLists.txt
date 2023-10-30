@@ -166,8 +166,56 @@ if(NOT SANITIZE_UNDEFINED)
 		)
 endif()
 
+if (ANDROID)
+
+file (WRITE ${PROJECT_BINARY_DIR}/useProtoc.sh "#!/bin/sh\n")
+
+file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/protos/common)
+file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/protos/clientlib)
+
+foreach (X IN LISTS GNS_COMMON_PROTOS)
+file (APPEND ${PROJECT_BINARY_DIR}/useProtoc.sh "protoc -I=../src/common --cpp_out=protos/common ../src/${X}\n")
+endforeach()
+
+foreach (X IN LISTS GNS_CLIENTLIB_PROTOS)
+file (APPEND ${PROJECT_BINARY_DIR}/useProtoc.sh "protoc -I=../src/common --cpp_out=protos/clientlib ../src/${X}\n")
+endforeach()
+
+foreach (X IN LISTS GNS_COMMON_PROTOS)
+file (APPEND ${PROJECT_BINARY_DIR}/useProtoc.sh "protoc -I=../src/common --cpp_out=../src/common ../src/${X}\n")
+endforeach()
+
+foreach (X IN LISTS GNS_CLIENTLIB_PROTOS)
+file (APPEND ${PROJECT_BINARY_DIR}/useProtoc.sh "protoc -I=../src/common --cpp_out=../src/common ../src/${X}\n")
+endforeach()
+
+
+execute_process (COMMAND bash -c "bash useProtoc.sh"
+WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+RESULT_VARIABLE errorval )
+
+
+file(GLOB GNS_COMMON_PROTO_SRCS
+	 "${PROJECT_BINARY_DIR}/protos/common/*.cc"
+)
+
+file(GLOB GNS_COMMON_PROTO_HDRS
+	 "${PROJECT_BINARY_DIR}/protos/common/*.h"
+)
+
+
+file(GLOB GNS_CLIENTLIB_PROTO_SRCS
+	 "${PROJECT_BINARY_DIR}/protos/clientlib/*.cc"
+)
+
+file(GLOB GNS_CLIENTLIB_PROTO_HDRS
+	 "${PROJECT_BINARY_DIR}/protos/clientlib/*.h"
+)
+
+else()
 protobuf_generate_cpp(GNS_COMMON_PROTO_SRCS GNS_COMMON_PROTO_HDRS ${GNS_COMMON_PROTOS})
 protobuf_generate_cpp(GNS_CLIENTLIB_PROTO_SRCS GNS_CLIENTLIB_PROTO_HDRS ${GNS_CLIENTLIB_PROTOS})
+endif()
 
 function(gns_set_target_protobuf_properties TGT )
 
@@ -178,20 +226,12 @@ add_definitions ( -DPOSIX -DANDROID -DNDEBUG -DGOOGLE_PROTOBUF_NO_RTTI -DSTEAMNE
 
 set_target_properties(${TGT} PROPERTIES OUTPUT_NAME "GameNetworkingSocketsAndroid")
 
-target_link_libraries(${TGT} PUBLIC
-		${Protobuf_LIBRARIES}
-		Threads::Threads
-		log
-		)
-
-else()
+endif(ANDROID)
 
 target_link_libraries(${TGT} PUBLIC
 		protobuf::libprotobuf
 		Threads::Threads
 		)
-
-endif(ANDROID)
 
 endfunction()
 
@@ -199,10 +239,10 @@ endfunction()
 function(gns_set_target_crypto_properties TGT)
 	if(USE_CRYPTO STREQUAL "OpenSSL" OR USE_CRYPTO25519 STREQUAL "OpenSSL")
 
+		# linking staticly for ANDROID is working.
 		if (ANDROID)
-			include_directories(${PROJECT_SOURCE_DIR}/../openssl/include)
 			target_link_libraries(${TGT} PUBLIC
-			${PROJECT_SOURCE_DIR}/../openssl/libcrypto.a
+			${PROJECT_BINARY_DIR}/_deps/openssl-src/libcrypto.a
 		)
 		else()
 			target_link_libraries(${TGT} PUBLIC

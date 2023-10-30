@@ -105,27 +105,70 @@ if (USE_CRYPTO STREQUAL "OpenSSL")
 
 if (ANDROID)
 
-message( "Building for Android... ")
-set(OPENSSL_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/../openssl/include)
-set(OPENSSL_ROOT_DIR ${PROJECT_SOURCE_DIR}/../openssl)
-set(OPENSSL_CRYPTO_LIBRARY ${PROJECT_SOURCE_DIR}/../openssl/libcrypto.so)
-set(Protobuf_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/../protobuf/src)
-set(Protobuf_LIBRARIES ${PROJECT_SOURCE_DIR}/../protobuf/buildAndroid/libprotobuf.a)
-set(Protobuf_DIR ${PROJECT_SOURCE_DIR}/../protobuf/buildAndroid/lib/cmake/protobuf)
-include_directories(${Protobuf_INCLUDE_DIR})
-link_directories(${Protobuf_LIBRARIES})
-list(APPEND CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/../protobuf)
-list(APPEND CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/../protobuf/buildAndroid)
+	message( "Fetching protobuf for Android... ")
 
-#strip file
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
+	include(FetchContent)
+
+	FetchContent_GetProperties(Protobuf)
+
+	if(NOT Protobuf_POPULATED)
+
+		FetchContent_Declare(Protobuf                              # name of the content
+			GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git  # the repository
+			GIT_TAG        ${ProtobufTag}                                 # the tag
+			OVERRIDE_FIND_PACKAGE
+			)
+	FetchContent_MakeAvailable(Protobuf)
+	endif ()
+
+	message( "Configuring protobuf for Android... ")
+
+	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid)
+	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/android.sh "#!/bin/sh\n")
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/android.sh "cmake -DCMAKE_TOOLCHAIN_FILE=../../../../android-ndk-r15c/build/cmake/android.toolchain.cmake -DANDROID_NDK=../../../../android-ndk-r15c/ -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -Dprotobuf_MODULE_COMPATIBLE=TRUE -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..
+	cp /usr/bin/protoc .")
+
+	execute_process (COMMAND bash -c "bash android.sh"
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid
+	RESULT_VARIABLE errorval )
+
+	message( "Fetching & Building OpenSSL for Android... ")
+
+
+	FetchContent_GetProperties(OpenSSL)
+
+	if(NOT OpenSSL_POPULATED)
+
+		FetchContent_Declare(OpenSSL                              # name of the content
+			GIT_REPOSITORY https://github.com/openssl/openssl.git  # the repository
+			GIT_TAG        ${OpenSSLTag}                                  # the tag
+			OVERRIDE_FIND_PACKAGE
+			)
+	FetchContent_MakeAvailable(OpenSSL)
+	endif ()
+
+	file (WRITE ${PROJECT_BINARY_DIR}/_deps/openssl-src/android.sh "#!/bin/sh\n")
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/android.sh "export ANDROID_NDK=../../../../android-ndk-r15c/
+	export PATH=$ANDROID_NDK/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin:$PATH
+	./Configure no-tests android-arm64 -D__ANDROID_API__=21
+	make")
+
+	execute_process (COMMAND bash -c "bash android.sh"
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/openssl-src
+	RESULT_VARIABLE errorval )
+
+	set(OPENSSL_CRYPTO_LIBRARY ${PROJECT_BINARY_DIR}/_deps/openssl-src/libcrypto.so)
+
+	set(OPENSSL_INCLUDE_DIR ${PROJECT_BINARY_DIR}/_deps/openssl-src/include)
+	include_directories(${OPENSSL_INCLUDE_DIR})
+
+	#strip
+	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
+	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
 
 endif (ANDROID)
 
 	find_package(OpenSSL REQUIRED)
-
-	message( STATUS "OPENSSL_INCLUDE_DIR = ${OPENSSL_INCLUDE_DIR}" )
 
 	# Ensure the OpenSSL version is recent enough. We need a bunch of EVP
 	# functionality.
@@ -136,8 +179,8 @@ endif (ANDROID)
 			list(APPEND CMAKE_REQUIRED_LIBRARIES ws2_32 crypt32)
 		endif()
 
-		#we are pretty sure we have OPENSSL_NEW_ENOUGH version for Android,
-		#otherwise check_symbol_exists finds it old for Android, dunno why.
+		#Bypassing "EVP_MD_CTX_free" check for Android
+		#because even pretty sure the version is higher than required, it fails.
 		if (NOT ANDROID)
 			check_symbol_exists(EVP_MD_CTX_free openssl/evp.h OPENSSL_NEW_ENOUGH)
 		else()
