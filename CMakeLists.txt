@@ -150,6 +150,7 @@ if (ANDROID)
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/openssl-src/android.sh "#!/bin/sh\n")
 	file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/android.sh "export ANDROID_NDK_HOME=../../../../android-ndk-r15c
 PATH=$ANDROID_NDK_HOME/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin:$PATH
+PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 ./Configure no-tests android-arm64 -D__ANDROID_API__=21
 make")
 
