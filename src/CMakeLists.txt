@@ -225,13 +225,24 @@ add_definitions ( -DPOSIX -DANDROID -DNDEBUG -DGOOGLE_PROTOBUF_NO_RTTI -DSTEAMNE
 -DCLANG_SUPPORT_DYN_ANNOTATION -DCMAKE_INTDIR="Release" -DGameNetworkingSockets_EXPORTS)
 
 set_target_properties(${TGT} PROPERTIES OUTPUT_NAME "GameNetworkingSocketsAndroid")
+ list(APPEND CMAKE_PREFIX_PATH ${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
 
-endif(ANDROID)
+include_directories(${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
+
+target_link_libraries(${TGT} PUBLIC
+		${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/libprotobuf.a
+		Threads::Threads
+		log
+		)
+else()
 
 target_link_libraries(${TGT} PUBLIC
 		protobuf::libprotobuf
 		Threads::Threads
 		)
+
+endif(ANDROID)
+
 
 endfunction()
 

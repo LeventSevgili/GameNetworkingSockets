@@ -125,8 +125,8 @@ if (ANDROID)
 
 	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid)
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/android.sh "#!/bin/sh\n")
-	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/android.sh "cmake -DCMAKE_TOOLCHAIN_FILE=../../../../android-ndk-r15c/build/cmake/android.toolchain.cmake -DANDROID_NDK=../../../../android-ndk-r15c/ -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -Dprotobuf_MODULE_COMPATIBLE=TRUE -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..
-	cp /usr/bin/protoc .")
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/android.sh "cmake -DCMAKE_TOOLCHAIN_FILE=../../../../android-ndk-r15c/build/cmake/android.toolchain.cmake -DANDROID_NDK_HOME=../../../../android-ndk-r15c/ -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..
+	sudo ninja")
 
 	execute_process (COMMAND bash -c "sudo bash android.sh"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid
