@@ -126,9 +126,9 @@ if (ANDROID)
 	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid)
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/android.sh "#!/bin/sh\n")
 	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/android.sh "cmake -DCMAKE_TOOLCHAIN_FILE=../../../../android-ndk-r15c/build/cmake/android.toolchain.cmake -DANDROID_NDK_HOME=../../../../android-ndk-r15c/ -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..
-	sudo ninja")
+	ninja")
 
-	execute_process (COMMAND bash -c "sudo bash android.sh"
+	execute_process (COMMAND bash "-c" "bash android.sh"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid
 	RESULT_VARIABLE errorval )
 
@@ -148,12 +148,12 @@ if (ANDROID)
 	endif ()
 
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/openssl-src/android.sh "#!/bin/sh\n")
-	file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/android.sh "export ANDROID_NDK_HOME=../../../../android-ndk-r15c/
-	export PATH=$ANDROID_NDK_HOME/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin:$PATH
-	./Configure no-tests android-arm64 -D__ANDROID_API__=21
-	make")
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/android.sh "export ANDROID_NDK_HOME=../../../../android-ndk-r15c
+PATH=$ANDROID_NDK_HOME/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin:$PATH
+./Configure no-tests android-arm64 -D__ANDROID_API__=21
+make")
 
-	execute_process (COMMAND bash -c "sudo bash android.sh"
+	execute_process (COMMAND bash "-c" "bash android.sh"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/openssl-src
 	RESULT_VARIABLE errorval )
 
