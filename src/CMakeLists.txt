@@ -230,7 +230,7 @@ set_target_properties(${TGT} PROPERTIES OUTPUT_NAME "GameNetworkingSocketsAndroi
 include_directories(${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
 
 target_link_libraries(${TGT} PUBLIC
-		${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/libprotobuf.a
+		protobuf::libprotobuf
 		Threads::Threads
 		log
 		)
