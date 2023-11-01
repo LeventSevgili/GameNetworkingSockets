@@ -96,21 +96,15 @@ if (WIN32)
 	endif()
 endif()
 
-if (USE_CRYPTO STREQUAL "OpenSSL")
-	# Match the OpenSSL runtime to our setting.
-	# Note that once found the library paths are cached and will not change if the option is changed.
-	if (MSVC)
-		set(OPENSSL_MSVC_STATIC_RT ${MSVC_CRT_STATIC})
-	endif()
 
 if (ANDROID)
-
+	#
+	# Fetch Protobuf, configure it and build it for Android platform
+	# Build for standalone and android platform.
+	#
 	message( "Fetching protobuf for Android... ")
-
 	include(FetchContent)
-
 	FetchContent_GetProperties(Protobuf)
-
 	if(NOT Protobuf_POPULATED)
 
 		FetchContent_Declare(Protobuf                              # name of the content
@@ -123,19 +117,55 @@ if (ANDROID)
 
 	message( "Configuring protobuf for Android... ")
 
-	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid)
-	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/android.sh "#!/bin/sh\n")
-	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/android.sh "cmake -DCMAKE_TOOLCHAIN_FILE=../../${ANDROID_NDK_RPATH}/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..")
+	if (UNIX)
+	set (fileName "android.sh")
+	set (filenameStandalone "standalone.sh")
+	set (fileHeader "#!/bin/sh\n")
+	endif()
 
-	execute_process (COMMAND bash "-c" "bash android.sh"
+	if (WIN32)
+	set (fileName "android.bat")
+	set (filenameStandalone "standalone.bat")
+	set (fileHeader "@echo off\n")
+	endif()
+
+	# configure android
+	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid)
+	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/${fileName} ${fileHeader})
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/${fileName} "cmake -DCMAKE_TOOLCHAIN_FILE=../../${ANDROID_NDK_RPATH}/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..")
+
+	# configure standalone
+	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone)
+	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone/${filenameStandalone} ${fileHeader})
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone/${filenameStandalone} "cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS=\"-fpic -O2\" -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
+	sudo cmake --build . --parallel 10")
+
+	if (UNIX)
+	execute_process (COMMAND bash "-c" "bash ${fileName}"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid
 	RESULT_VARIABLE errorval )
 
+	execute_process (COMMAND bash "-c" "bash ${filenameStandalone}"
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone
+	RESULT_VARIABLE errorval )
+	endif ()
+
+	if (WIN32)
+	execute_process (COMMAND cmd "-c" "${fileName}"
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid
+	RESULT_VARIABLE errorval )
+
+	execute_process (COMMAND cmd "-c" "${filenameStandalone}"
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone
+	RESULT_VARIABLE errorval )
+	endif ()
+
+
+	#
+	# Fetch OpenSSL, configure it and build it for Android platform
+	#
 	message( "Fetching & Building OpenSSL for Android... ")
-
-
 	FetchContent_GetProperties(OpenSSL)
-
 	if(NOT OpenSSL_POPULATED)
 
 		FetchContent_Declare(OpenSSL                              # name of the content
@@ -146,29 +176,51 @@ if (ANDROID)
 	FetchContent_MakeAvailable(OpenSSL)
 	endif ()
 
-	file (WRITE ${PROJECT_BINARY_DIR}/_deps/openssl-src/android.sh "#!/bin/sh\n")
-	file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/android.sh "export ANDROID_NDK_HOME=../../${ANDROID_NDK_RPATH}
+	file (WRITE ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} ${fileHeader})
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export ANDROID_NDK_HOME=../../${ANDROID_NDK_RPATH}
 PATH=$ANDROID_NDK_HOME/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin:$PATH
 PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 ./Configure no-tests android-arm64 -D__ANDROID_API__=21
 make")
 
-	execute_process (COMMAND bash "-c" "bash android.sh"
+	if (UNIX)
+	execute_process (COMMAND bash "-c" "bash ${fileName}"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/openssl-src
 	RESULT_VARIABLE errorval )
+	endif()
+
+	if (WIN32)
+	execute_process (COMMAND cmd "-c" "${fileName}"
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/openssl-src
+	RESULT_VARIABLE errorval )
+	endif()
+
+	#
+	# Set some paths for fetched libraries
+	#
 
 	set(OPENSSL_CRYPTO_LIBRARY ${PROJECT_BINARY_DIR}/_deps/openssl-src/libcrypto.so)
-
 	set(OPENSSL_INCLUDE_DIR ${PROJECT_BINARY_DIR}/_deps/openssl-src/include)
 	include_directories(${OPENSSL_INCLUDE_DIR})
 
-	#strip
+	#
+	# Set -s flag to strip libGameNetworkingSockets.so, can be removed if symbols are needed.
+	#
+
 	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
 
 endif (ANDROID)
 
+if (USE_CRYPTO STREQUAL "OpenSSL")
+	# Match the OpenSSL runtime to our setting.
+	# Note that once found the library paths are cached and will not change if the option is changed.
+	if (MSVC)
+		set(OPENSSL_MSVC_STATIC_RT ${MSVC_CRT_STATIC})
+	endif()
+
 	find_package(OpenSSL REQUIRED)
+	message( STATUS "OPENSSL_INCLUDE_DIR = ${OPENSSL_INCLUDE_DIR}" )
 
 	# Ensure the OpenSSL version is recent enough. We need a bunch of EVP
 	# functionality.
@@ -178,7 +230,6 @@ endif (ANDROID)
 		if(WIN32 AND OPENSSL_USE_STATIC_LIBS)
 			list(APPEND CMAKE_REQUIRED_LIBRARIES ws2_32 crypt32)
 		endif()
-
 		#Bypassing "EVP_MD_CTX_free" check for Android
 		#because even pretty sure the version is higher than required, it fails.
 		if (NOT ANDROID)
@@ -260,7 +311,7 @@ function(set_target_common_gns_properties TGT)
 				)
 			target_compile_options(${TGT} PRIVATE -fno-stack-protector)
 		endif()
-	elseif(CMAKE_SYSTEM_NAME MATCHES Android)
+		elseif(CMAKE_SYSTEM_NAME MATCHES Android)
 		target_compile_definitions(${TGT} PUBLIC ANDROID)
 	else()
 		message(FATAL_ERROR "Could not identify your target operating system")

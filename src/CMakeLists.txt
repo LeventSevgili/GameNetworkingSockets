@@ -166,67 +166,75 @@ if(NOT SANITIZE_UNDEFINED)
 		)
 endif()
 
+#
+# Implemented a custom protobuf_generate_cpp logic for Android
+# When using "FetchContent_Declare" with OVERRIDE_FIND_PACKAGE, protobuf-config.cmake won't be used, thus the protobuf-generate macro would be unavailable.
+# There is a fix below link
+# fix link: https://github.com/protocolbuffers/protobuf/pull/10426
+# but merged fix date may be a later time than protobuf git version we want to build for Android, so it is better to stay safe with a custom protobuf_generate_cpp method.
+#
+
 if (ANDROID)
 
-file (WRITE ${PROJECT_BINARY_DIR}/useProtoc.sh "#!/bin/sh\n")
+if (UNIX)
+	set (fileName "useProtoc.sh")
+	set (fileHeader "#!/bin/sh\n")
+endif()
 
+if (WIN32)
+	set (fileName "useProtoc.bat")
+	set (fileHeader "@echo off\n")
+endif()
+
+file (WRITE ${PROJECT_BINARY_DIR}/${fileName} ${fileHeader})
 file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/protos/common)
 file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/protos/clientlib)
 
 foreach (X IN LISTS GNS_COMMON_PROTOS)
-file (APPEND ${PROJECT_BINARY_DIR}/useProtoc.sh "protoc -I=../src/common --cpp_out=protos/common ../src/${X}\n")
+file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=protos/common ../src/${X}\n")
 endforeach()
-
 foreach (X IN LISTS GNS_CLIENTLIB_PROTOS)
-file (APPEND ${PROJECT_BINARY_DIR}/useProtoc.sh "protoc -I=../src/common --cpp_out=protos/clientlib ../src/${X}\n")
+file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=protos/clientlib ../src/${X}\n")
 endforeach()
-
 foreach (X IN LISTS GNS_COMMON_PROTOS)
-file (APPEND ${PROJECT_BINARY_DIR}/useProtoc.sh "protoc -I=../src/common --cpp_out=../src/common ../src/${X}\n")
+file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=../src/common ../src/${X}\n")
 endforeach()
-
 foreach (X IN LISTS GNS_CLIENTLIB_PROTOS)
-file (APPEND ${PROJECT_BINARY_DIR}/useProtoc.sh "protoc -I=../src/common --cpp_out=../src/common ../src/${X}\n")
+file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=../src/common ../src/${X}\n")
 endforeach()
 
-
-execute_process (COMMAND bash -c "bash useProtoc.sh"
+if (UNIX)
+execute_process (COMMAND bash -c "bash ${fileName}"
 WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
 RESULT_VARIABLE errorval )
+endif()
 
+if (WIN32)
+execute_process (COMMAND cmd -c "${fileName}"
+WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+RESULT_VARIABLE errorval )
+endif()
 
 file(GLOB GNS_COMMON_PROTO_SRCS
 	 "${PROJECT_BINARY_DIR}/protos/common/*.cc"
 )
-
 file(GLOB GNS_COMMON_PROTO_HDRS
 	 "${PROJECT_BINARY_DIR}/protos/common/*.h"
 )
-
-
 file(GLOB GNS_CLIENTLIB_PROTO_SRCS
 	 "${PROJECT_BINARY_DIR}/protos/clientlib/*.cc"
 )
-
 file(GLOB GNS_CLIENTLIB_PROTO_HDRS
 	 "${PROJECT_BINARY_DIR}/protos/clientlib/*.h"
 )
-
 else()
 protobuf_generate_cpp(GNS_COMMON_PROTO_SRCS GNS_COMMON_PROTO_HDRS ${GNS_COMMON_PROTOS})
 protobuf_generate_cpp(GNS_CLIENTLIB_PROTO_SRCS GNS_CLIENTLIB_PROTO_HDRS ${GNS_CLIENTLIB_PROTOS})
 endif()
-
 function(gns_set_target_protobuf_properties TGT )
 
 if (ANDROID)
-
-add_definitions ( -DPOSIX -DANDROID -DNDEBUG -DGOOGLE_PROTOBUF_NO_RTTI -DSTEAMNETWORKINGSOCKETS_FOREXPORT -DENABLE_OPENSSLCONNECTION -DVALVE_CRYPTO_25519_OPENSSL -DVALVE_CRYPTO_ENABLE_25519
--DCLANG_SUPPORT_DYN_ANNOTATION -DCMAKE_INTDIR="Release" -DGameNetworkingSockets_EXPORTS)
-
-set_target_properties(${TGT} PROPERTIES OUTPUT_NAME "GameNetworkingSocketsAndroid")
- list(APPEND CMAKE_PREFIX_PATH ${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
-
+list(APPEND CMAKE_PREFIX_PATH ${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
 include_directories(${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
 
 target_link_libraries(${TGT} PUBLIC
@@ -235,31 +243,27 @@ target_link_libraries(${TGT} PUBLIC
 		log
 		)
 else()
-
-target_link_libraries(${TGT} PUBLIC
+	target_link_libraries(${TGT} PUBLIC
 		protobuf::libprotobuf
 		Threads::Threads
 		)
-
-endif(ANDROID)
-
-
+endif()
 endfunction()
 
 # Set the target properties (sources, link libs, defines) based on crypto settings
 function(gns_set_target_crypto_properties TGT)
 	if(USE_CRYPTO STREQUAL "OpenSSL" OR USE_CRYPTO25519 STREQUAL "OpenSSL")
 
-		# linking staticly for ANDROID is working.
+	# linking staticly for ANDROID (which is working)
 		if (ANDROID)
 			target_link_libraries(${TGT} PUBLIC
 			${PROJECT_BINARY_DIR}/_deps/openssl-src/libcrypto.a
 		)
 		else()
-			target_link_libraries(${TGT} PUBLIC
+		target_link_libraries(${TGT} PUBLIC
 			OpenSSL::Crypto
-		)
-		endif (ANDROID)
+			)
+		endif(ANDROID)
 
 		if(WIN32 AND OPENSSL_USE_STATIC_LIBS)
 			target_link_libraries(${TGT} PUBLIC
