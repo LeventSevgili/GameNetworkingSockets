@@ -96,13 +96,12 @@ if (WIN32)
 	endif()
 endif()
 
-
-if (ANDROID)
+if (ANDROID OR APPLE)
 	#
 	# Fetch Protobuf, configure it and build it for Android platform
 	# Build for standalone and android platform.
 	#
-	message( "Fetching protobuf for Android... ")
+	message( "Fetching protobuf... ")
 	include(FetchContent)
 	FetchContent_GetProperties(Protobuf)
 	if(NOT Protobuf_POPULATED)
@@ -115,7 +114,7 @@ if (ANDROID)
 	FetchContent_MakeAvailable(Protobuf)
 	endif ()
 
-	message( "Configuring protobuf for Android... ")
+	message( "Configuring protobuf... ")
 
 	if (UNIX)
 	set (fileName "android.sh")
@@ -129,16 +128,29 @@ if (ANDROID)
 	set (fileHeader "@echo off\n")
 	endif()
 
-	# configure android
+	# configure android & ios
 	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid)
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/${fileName} ${fileHeader})
-	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/${fileName} "cmake -DCMAKE_TOOLCHAIN_FILE=../../${ANDROID_NDK_RPATH}/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..")
 
+	if (NOT APPLE) #ANDROID
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/${fileName} "cmake -DCMAKE_TOOLCHAIN_FILE=../../${ANDROID_NDK_RPATH}/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..")
+	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin) #MACOS
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/${fileName} "cmake -G Ninja ..")
+	else() #iOS
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/${fileName} "cmake -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 -G Ninja ..")
+	
+	endif()
 	# configure standalone
 	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone)
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone/${filenameStandalone} ${fileHeader})
+
+	if (NOT APPLE) 
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone/${filenameStandalone} "cmake -G Ninja ..
+	sudo cmake --build . --parallel 10")
+	else()
 	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone/${filenameStandalone} "cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS=\"-fpic -O2\" -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
 	sudo cmake --build . --parallel 10")
+	endif()
 
 	if (UNIX)
 	execute_process (COMMAND bash "-c" "bash ${fileName}"
@@ -160,11 +172,10 @@ if (ANDROID)
 	RESULT_VARIABLE errorval )
 	endif ()
 
-
 	#
-	# Fetch OpenSSL, configure it and build it for Android platform
+	# Fetch OpenSSL, configure it and build it
 	#
-	message( "Fetching & Building OpenSSL for Android... ")
+	message( "Fetching & Building OpenSSL... ")
 	FetchContent_GetProperties(OpenSSL)
 	if(NOT OpenSSL_POPULATED)
 
@@ -177,11 +188,25 @@ if (ANDROID)
 	endif ()
 
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} ${fileHeader})
-	file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export ANDROID_NDK_HOME=../../${ANDROID_NDK_RPATH}
+
+	if (NOT APPLE)
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export ANDROID_NDK_HOME=../../${ANDROID_NDK_RPATH}
 PATH=$ANDROID_NDK_HOME/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin:$PATH
 PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 ./Configure no-tests android-arm64 -D__ANDROID_API__=21
 make")
+	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin)
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "./Configure darwin64-x86_64-cc shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp 
+make")
+	elseif (CMAKE_SYSTEM_NAME MATCHES iOS) 
+		set( OPENSSL_TARGET_ARCHITECTURES_iphoneos arm64 )
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export CC=clang;
+export CROSS_TOP=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer
+export CROSS_SDK=iPhoneOS.sdk
+PATH=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:$PATH	
+./Configure ios64-cross no-shared no-dso no-hw no-engine
+make")
+	endif()
 
 	if (UNIX)
 	execute_process (COMMAND bash "-c" "bash ${fileName}"
@@ -210,7 +235,7 @@ make")
 	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
 
-endif (ANDROID)
+endif (ANDROID OR APPLE)
 
 if (USE_CRYPTO STREQUAL "OpenSSL")
 	# Match the OpenSSL runtime to our setting.
@@ -232,7 +257,7 @@ if (USE_CRYPTO STREQUAL "OpenSSL")
 		endif()
 		#Bypassing "EVP_MD_CTX_free" check for Android
 		#because even pretty sure the version is higher than required, it fails.
-		if (NOT ANDROID)
+		if (NOT ANDROID AND NOT APPLE)
 			check_symbol_exists(EVP_MD_CTX_free openssl/evp.h OPENSSL_NEW_ENOUGH)
 		else()
 			set(OPENSSL_NEW_ENOUGH TRUE)
@@ -282,6 +307,8 @@ function(set_target_common_gns_properties TGT)
 	if(CMAKE_SYSTEM_NAME MATCHES Linux)
 		target_compile_definitions(${TGT} PUBLIC LINUX)
 	elseif(CMAKE_SYSTEM_NAME MATCHES Darwin)
+		target_compile_definitions(${TGT} PUBLIC OSX)
+	elseif(CMAKE_SYSTEM_NAME MATCHES iOS)
 		target_compile_definitions(${TGT} PUBLIC OSX)
 	elseif(CMAKE_SYSTEM_NAME MATCHES FreeBSD)
 		target_compile_definitions(${TGT} PUBLIC FREEBSD)

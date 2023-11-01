@@ -167,76 +167,78 @@ if(NOT SANITIZE_UNDEFINED)
 endif()
 
 #
-# Implemented a custom protobuf_generate_cpp logic for Android
+# Implemented a custom protobuf_generate_cpp logic
 # When using "FetchContent_Declare" with OVERRIDE_FIND_PACKAGE, protobuf-config.cmake won't be used, thus the protobuf-generate macro would be unavailable.
 # There is a fix below link
 # fix link: https://github.com/protocolbuffers/protobuf/pull/10426
-# but merged fix date may be a later time than protobuf git version we want to build for Android, so it is better to stay safe with a custom protobuf_generate_cpp method.
+# but merged fix date may be a later date than the protobuf git version we want to build for, so i find it better to stay safe with a custom protobuf_generate_cpp method.
 #
 
-if (ANDROID)
+if (ANDROID OR APPLE)
+	if (UNIX)
+		set (fileName "useProtoc.sh")
+		set (fileHeader "#!/bin/sh\n")
+	endif()
 
-if (UNIX)
-	set (fileName "useProtoc.sh")
-	set (fileHeader "#!/bin/sh\n")
-endif()
+	if (WIN32)
+		set (fileName "useProtoc.bat")
+		set (fileHeader "@echo off\n")
+	endif()
 
-if (WIN32)
-	set (fileName "useProtoc.bat")
-	set (fileHeader "@echo off\n")
-endif()
+	file (WRITE ${PROJECT_BINARY_DIR}/${fileName} ${fileHeader})
+	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/protos/common)
+	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/protos/clientlib)
 
-file (WRITE ${PROJECT_BINARY_DIR}/${fileName} ${fileHeader})
-file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/protos/common)
-file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/protos/clientlib)
+	foreach (X IN LISTS GNS_COMMON_PROTOS)
+	file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=protos/common ../src/${X}\n")
+	endforeach()
+	foreach (X IN LISTS GNS_CLIENTLIB_PROTOS)
+	file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=protos/clientlib ../src/${X}\n")
+	endforeach()
+	foreach (X IN LISTS GNS_COMMON_PROTOS)
+	file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=../src/common ../src/${X}\n")
+	endforeach()
+	foreach (X IN LISTS GNS_CLIENTLIB_PROTOS)
+	file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=../src/common ../src/${X}\n")
+	endforeach()
 
-foreach (X IN LISTS GNS_COMMON_PROTOS)
-file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=protos/common ../src/${X}\n")
-endforeach()
-foreach (X IN LISTS GNS_CLIENTLIB_PROTOS)
-file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=protos/clientlib ../src/${X}\n")
-endforeach()
-foreach (X IN LISTS GNS_COMMON_PROTOS)
-file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=../src/common ../src/${X}\n")
-endforeach()
-foreach (X IN LISTS GNS_CLIENTLIB_PROTOS)
-file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildStandAlone/protoc -I=../src/common --cpp_out=../src/common ../src/${X}\n")
-endforeach()
+	if (UNIX)
+	execute_process (COMMAND bash -c "bash ${fileName}"
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+	RESULT_VARIABLE errorval )
+	endif()
 
-if (UNIX)
-execute_process (COMMAND bash -c "bash ${fileName}"
-WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
-RESULT_VARIABLE errorval )
-endif()
+	if (WIN32)
+	execute_process (COMMAND cmd -c "${fileName}"
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+	RESULT_VARIABLE errorval )
+	endif()
 
-if (WIN32)
-execute_process (COMMAND cmd -c "${fileName}"
-WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
-RESULT_VARIABLE errorval )
-endif()
-
-file(GLOB GNS_COMMON_PROTO_SRCS
-	 "${PROJECT_BINARY_DIR}/protos/common/*.cc"
-)
-file(GLOB GNS_COMMON_PROTO_HDRS
-	 "${PROJECT_BINARY_DIR}/protos/common/*.h"
-)
-file(GLOB GNS_CLIENTLIB_PROTO_SRCS
-	 "${PROJECT_BINARY_DIR}/protos/clientlib/*.cc"
-)
-file(GLOB GNS_CLIENTLIB_PROTO_HDRS
-	 "${PROJECT_BINARY_DIR}/protos/clientlib/*.h"
-)
+	file(GLOB GNS_COMMON_PROTO_SRCS
+		"${PROJECT_BINARY_DIR}/protos/common/*.cc"
+	)
+	file(GLOB GNS_COMMON_PROTO_HDRS
+		"${PROJECT_BINARY_DIR}/protos/common/*.h"
+	)
+	file(GLOB GNS_CLIENTLIB_PROTO_SRCS
+		"${PROJECT_BINARY_DIR}/protos/clientlib/*.cc"
+	)
+	file(GLOB GNS_CLIENTLIB_PROTO_HDRS
+		"${PROJECT_BINARY_DIR}/protos/clientlib/*.h"
+	)
 else()
-protobuf_generate_cpp(GNS_COMMON_PROTO_SRCS GNS_COMMON_PROTO_HDRS ${GNS_COMMON_PROTOS})
-protobuf_generate_cpp(GNS_CLIENTLIB_PROTO_SRCS GNS_CLIENTLIB_PROTO_HDRS ${GNS_CLIENTLIB_PROTOS})
+	protobuf_generate_cpp(GNS_COMMON_PROTO_SRCS GNS_COMMON_PROTO_HDRS ${GNS_COMMON_PROTOS})
+	protobuf_generate_cpp(GNS_CLIENTLIB_PROTO_SRCS GNS_CLIENTLIB_PROTO_HDRS ${GNS_CLIENTLIB_PROTOS})
 endif()
+
 function(gns_set_target_protobuf_properties TGT )
 
-if (ANDROID)
-list(APPEND CMAKE_PREFIX_PATH ${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
-include_directories(${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
+if (ANDROID OR APPLE)
+	list(APPEND CMAKE_PREFIX_PATH ${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
+	include_directories(${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
+endif ()
 
+if (ANDROID)
 target_link_libraries(${TGT} PUBLIC
 		protobuf::libprotobuf
 		Threads::Threads
@@ -255,7 +257,7 @@ function(gns_set_target_crypto_properties TGT)
 	if(USE_CRYPTO STREQUAL "OpenSSL" OR USE_CRYPTO25519 STREQUAL "OpenSSL")
 
 	# linking staticly for ANDROID (which is working)
-		if (ANDROID)
+		if (ANDROID OR APPLE)
 			target_link_libraries(${TGT} PUBLIC
 			${PROJECT_BINARY_DIR}/_deps/openssl-src/libcrypto.a
 		)
@@ -263,7 +265,7 @@ function(gns_set_target_crypto_properties TGT)
 		target_link_libraries(${TGT} PUBLIC
 			OpenSSL::Crypto
 			)
-		endif(ANDROID)
+		endif(ANDROID OR APPLE)
 
 		if(WIN32 AND OPENSSL_USE_STATIC_LIBS)
 			target_link_libraries(${TGT} PUBLIC
@@ -398,6 +400,8 @@ macro(set_clientlib_target_properties GNS_TARGET)
 			target_link_libraries(${GNS_TARGET} PUBLIC bcrypt)
 		endif()
 	elseif(CMAKE_SYSTEM_NAME MATCHES Android)
+ 
+	elseif(CMAKE_SYSTEM_NAME MATCHES iOS)
 
 	else()
 		message(FATAL_ERROR "Could not identify your target operating system")
