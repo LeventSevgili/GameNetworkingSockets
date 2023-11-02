@@ -118,13 +118,11 @@ if (ANDROID OR APPLE)
 
 	if (UNIX)
 	set (fileName "build.sh")
-	set (filenameStandalone "standalone.sh")
 	set (fileHeader "#!/bin/sh\n")
 	endif()
 
 	if (WIN32)
 	set (fileName "build.bat")
-	set (filenameStandalone "standalone.bat")
 	set (fileHeader "@echo off\n")
 	endif()
 
@@ -147,15 +145,15 @@ if (ANDROID OR APPLE)
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 -G Ninja ..")
 	
 	endif()
-	# configure standalone
+	# configure for current platform
 	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform)
-	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${filenameStandalone} ${fileHeader})
+	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${fileName} ${fileHeader})
 
 	if (NOT APPLE) 
-	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${filenameStandalone} "cmake -G Ninja ..
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${fileName} "cmake -G Ninja ..
 	sudo cmake --build . --parallel 10")
 	else()
-	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${filenameStandalone} "cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS=\"-fpic -O2\" -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${fileName} "cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS=\"-fpic -O2\" -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
 	sudo cmake --build . --parallel 10")
 	endif()
 
@@ -164,7 +162,7 @@ if (ANDROID OR APPLE)
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}
 	RESULT_VARIABLE errorval )
 
-	execute_process (COMMAND bash "-c" "bash ${filenameStandalone}"
+	execute_process (COMMAND bash "-c" "bash ${fileName}"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform
 	RESULT_VARIABLE errorval )
 	endif ()
@@ -174,7 +172,7 @@ if (ANDROID OR APPLE)
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}
 	RESULT_VARIABLE errorval )
 
-	execute_process (COMMAND cmd "-c" "${filenameStandalone}"
+	execute_process (COMMAND cmd "-c" "${fileName}"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform
 	RESULT_VARIABLE errorval )
 	endif ()
