@@ -210,7 +210,9 @@ PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 make")
 	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin)
 		set(CMAKE_OSX_SYSROOT "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk")
-		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "./Configure darwin64-x86_64-cc shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "CROSS_TOP=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer
+export CROSS_SDK=MacOSX.sdk
+./Configure darwin64-x86_64-cc shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp
 make")
 	elseif (CMAKE_SYSTEM_NAME MATCHES iOS) 
 		set( OPENSSL_TARGET_ARCHITECTURES_iphoneos arm64 )
