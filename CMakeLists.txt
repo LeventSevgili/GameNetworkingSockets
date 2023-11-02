@@ -98,17 +98,17 @@ endif()
 
 if (ANDROID OR APPLE)
 	#
-	# Fetch Protobuf, configure it and build it for Android platform
-	# Build for standalone and android platform.
+	# Fetch Protobuf, configure it and build it for the desired platform. Supported platforms: iOS, Android and MacOS
+	# Build for current building platform first at configure time, so we can protoc before compile time.
 	#
 	message( "Fetching protobuf... ")
 	include(FetchContent)
 	FetchContent_GetProperties(Protobuf)
 	if(NOT Protobuf_POPULATED)
 
-		FetchContent_Declare(Protobuf                              # name of the content
-			GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git  # the repository
-			GIT_TAG        ${ProtobufTag}                                 # the tag
+		FetchContent_Declare(Protobuf
+			GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
+			GIT_TAG        ${ProtobufTag}
 			OVERRIDE_FIND_PACKAGE
 			)
 	FetchContent_MakeAvailable(Protobuf)
@@ -117,71 +117,78 @@ if (ANDROID OR APPLE)
 	message( "Configuring protobuf... ")
 
 	if (UNIX)
-	set (fileName "android.sh")
+	set (fileName "build.sh")
 	set (filenameStandalone "standalone.sh")
 	set (fileHeader "#!/bin/sh\n")
 	endif()
 
 	if (WIN32)
-	set (fileName "android.bat")
+	set (fileName "build.bat")
 	set (filenameStandalone "standalone.bat")
 	set (fileHeader "@echo off\n")
 	endif()
 
-	# configure android & ios
-	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid)
-	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/${fileName} ${fileHeader})
+	if (CMAKE_SYSTEM_NAME MATCHES Darwin)
+		set (depsBuildFolderName buildMacOS)
+	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin)
+		set (depsBuildFolderName buildiOS)
+	elseif (ANDROID)
+		set (depsBuildFolderName buildAndroid)
+
+
+	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName})
+	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} ${fileHeader})
 
 	if (NOT APPLE) #ANDROID
-		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/${fileName} "cmake -DCMAKE_TOOLCHAIN_FILE=../../${ANDROID_NDK_RPATH}/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..")
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_TOOLCHAIN_FILE=../../${ANDROID_NDK_RPATH}/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..")
 	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin) #MACOS
-		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/${fileName} "cmake -G Ninja ..")
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -G Ninja ..")
 	else() #iOS
-		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid/${fileName} "cmake -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 -G Ninja ..")
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 -G Ninja ..")
 	
 	endif()
 	# configure standalone
-	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone)
-	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone/${filenameStandalone} ${fileHeader})
+	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform)
+	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${filenameStandalone} ${fileHeader})
 
 	if (NOT APPLE) 
-	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone/${filenameStandalone} "cmake -G Ninja ..
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${filenameStandalone} "cmake -G Ninja ..
 	sudo cmake --build . --parallel 10")
 	else()
-	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone/${filenameStandalone} "cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS=\"-fpic -O2\" -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${filenameStandalone} "cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS=\"-fpic -O2\" -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
 	sudo cmake --build . --parallel 10")
 	endif()
 
 	if (UNIX)
 	execute_process (COMMAND bash "-c" "bash ${fileName}"
-	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}
 	RESULT_VARIABLE errorval )
 
 	execute_process (COMMAND bash "-c" "bash ${filenameStandalone}"
-	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform
 	RESULT_VARIABLE errorval )
 	endif ()
 
 	if (WIN32)
 	execute_process (COMMAND cmd "-c" "${fileName}"
-	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildAndroid
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}
 	RESULT_VARIABLE errorval )
 
 	execute_process (COMMAND cmd "-c" "${filenameStandalone}"
-	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildStandAlone
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform
 	RESULT_VARIABLE errorval )
 	endif ()
 
 	#
-	# Fetch OpenSSL, configure it and build it
+	# Fetch OpenSSL, configure it and build it, supported platforms: iOS, Android and MacOS
 	#
 	message( "Fetching & Building OpenSSL... ")
 	FetchContent_GetProperties(OpenSSL)
 	if(NOT OpenSSL_POPULATED)
 
-		FetchContent_Declare(OpenSSL                              # name of the content
-			GIT_REPOSITORY https://github.com/openssl/openssl.git  # the repository
-			GIT_TAG        ${OpenSSLTag}                                  # the tag
+		FetchContent_Declare(OpenSSL
+			GIT_REPOSITORY https://github.com/openssl/openssl.git
+			GIT_TAG        ${OpenSSLTag}
 			OVERRIDE_FIND_PACKAGE
 			)
 	FetchContent_MakeAvailable(OpenSSL)
