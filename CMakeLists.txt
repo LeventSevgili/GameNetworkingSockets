@@ -199,6 +199,16 @@ if (ANDROID OR APPLE)
 	FetchContent_MakeAvailable(OpenSSL)
 	endif ()
 
+
+	#
+	# Set some paths for fetched libraries
+	#
+
+	set(OPENSSL_CRYPTO_LIBRARY ${PROJECT_BINARY_DIR}/_deps/openssl-src/libcrypto.so)
+	set(OPENSSL_INCLUDE_DIR ${PROJECT_BINARY_DIR}/_deps/openssl-src/include)
+	include_directories(${OPENSSL_INCLUDE_DIR})
+
+
 	# Configure OpenSSL for desired platform
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} ${fileHeader})
 
@@ -208,10 +218,8 @@ PATH=$ANDROID_NDK_HOME/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_6
 PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 ./Configure no-tests android-arm64 -D__ANDROID_API__=21
 make")
-	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin)
-		set(CMAKE_OSX_SYSROOT "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk")
-		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "CROSS_TOP=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer
-export CROSS_SDK=MacOSX.sdk
+	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin) 
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export SDKROOT=\"$(xcrun --sdk macosx --show-sdk-path)\"
 ./Configure darwin64-x86_64-cc shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp
 make")
 	elseif (CMAKE_SYSTEM_NAME MATCHES iOS) 
@@ -236,14 +244,6 @@ make")
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/openssl-src
 	RESULT_VARIABLE errorval )
 	endif()
-
-	#
-	# Set some paths for fetched libraries
-	#
-
-	set(OPENSSL_CRYPTO_LIBRARY ${PROJECT_BINARY_DIR}/_deps/openssl-src/libcrypto.so)
-	set(OPENSSL_INCLUDE_DIR ${PROJECT_BINARY_DIR}/_deps/openssl-src/include)
-	include_directories(${OPENSSL_INCLUDE_DIR})
 
 	#
 	# Optional: Set -s flag to strip(removes symbols) the output library (for ex: libGameNetworkingSockets.so)
