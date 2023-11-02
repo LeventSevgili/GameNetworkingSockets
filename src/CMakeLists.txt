@@ -168,13 +168,15 @@ endif()
 
 #
 # Implemented a custom protobuf_generate_cpp logic
-# When using "FetchContent_Declare" with OVERRIDE_FIND_PACKAGE, protobuf-config.cmake won't be used, thus the protobuf-generate macro would be unavailable.
-# There is a fix below link
+# Why? When using "FetchContent_Declare" with OVERRIDE_FIND_PACKAGE, protobuf-config.cmake won't be used, thus the protobuf-generate macro(protobuf_generate_cpp) would be unavailable.
+# There is already a fix at below link
 # fix link: https://github.com/protocolbuffers/protobuf/pull/10426
-# but merged fix date may be a later date than the protobuf git version we want to build for, so i find it better to stay safe with a custom protobuf_generate_cpp method.
+# But merged fix date may be a later date than the protobuf git version we want to build for, so i find it better to stay safe with a custom protobuf_generate_cpp method.
 #
 
 if (ANDROID OR APPLE)
+
+	# set some file names depending on the platform
 	if (UNIX)
 		set (fileName "protocFiles.sh")
 		set (fileHeader "#!/bin/sh\n")
@@ -185,6 +187,7 @@ if (ANDROID OR APPLE)
 		set (fileHeader "@echo off\n")
 	endif()
 
+	# Cache protoc commands to a bash file by iterating proto files
 	file (WRITE ${PROJECT_BINARY_DIR}/${fileName} ${fileHeader})
 	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/protos/common)
 	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/protos/clientlib)
@@ -202,6 +205,7 @@ if (ANDROID OR APPLE)
 	file (APPEND ${PROJECT_BINARY_DIR}/${fileName} "_deps/protobuf-src/buildCurrentPlatform/protoc -I=../src/common --cpp_out=../src/common ../src/${X}\n")
 	endforeach()
 
+	# Run the bash file
 	if (UNIX)
 	execute_process (COMMAND bash -c "bash ${fileName}"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
@@ -214,6 +218,7 @@ if (ANDROID OR APPLE)
 	RESULT_VARIABLE errorval )
 	endif()
 
+	# Populate the output lists
 	file(GLOB GNS_COMMON_PROTO_SRCS
 		"${PROJECT_BINARY_DIR}/protos/common/*.cc"
 	)
@@ -233,11 +238,13 @@ endif()
 
 function(gns_set_target_protobuf_properties TGT )
 
+# Set some configs for Android and Apple
 if (ANDROID OR APPLE)
 	list(APPEND CMAKE_PREFIX_PATH ${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
 	include_directories(${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
 endif ()
 
+# Android requires that log library
 if (ANDROID)
 target_link_libraries(${TGT} PUBLIC
 		protobuf::libprotobuf
@@ -256,7 +263,7 @@ endfunction()
 function(gns_set_target_crypto_properties TGT)
 	if(USE_CRYPTO STREQUAL "OpenSSL" OR USE_CRYPTO25519 STREQUAL "OpenSSL")
 
-	# linking staticly for ANDROID (which is working)
+		# linking staticly for Android and Apple
 		if (ANDROID OR APPLE)
 			target_link_libraries(${TGT} PUBLIC
 			${PROJECT_BINARY_DIR}/_deps/openssl-src/libcrypto.a
@@ -275,6 +282,7 @@ function(gns_set_target_crypto_properties TGT)
 		endif()
 	endif()
 
+	# Currently libsodium linking is not supported for Android and Apple.
 	if(USE_CRYPTO STREQUAL "libsodium" OR USE_CRYPTO25519 STREQUAL "libsodium")
 		target_link_libraries(${TGT} PUBLIC
 			sodium

@@ -99,7 +99,8 @@ endif()
 if (ANDROID OR APPLE)
 	#
 	# Fetch Protobuf, configure it and build it for the desired platform. Supported platforms: iOS, Android and MacOS
-	# Build for current building platform first at configure time, so we can protoc before compile time.
+	# Build it twice, one in config time for current platform one in compile time for desired platform
+	# So we can protoc source files before compile time with the current platform (Otherwise protoc may be built for different arch. than your building machine cpu)
 	#
 	message( "Fetching protobuf... ")
 	include(FetchContent)
@@ -116,6 +117,7 @@ if (ANDROID OR APPLE)
 
 	message( "Configuring protobuf... ")
 
+	# Some pre-configs for Protobuf config and buid operations
 	if (UNIX)
 	set (fileName "build.sh")
 	set (fileHeader "#!/bin/sh\n")
@@ -134,22 +136,23 @@ if (ANDROID OR APPLE)
 		set (depsBuildFolderName buildAndroid)
 	endif()
 
+	# Configure Protobuf for desired platform
 	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName})
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} ${fileHeader})
 
-	if (NOT APPLE) #ANDROID
+	if (ANDROID)
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_TOOLCHAIN_FILE=../../${ANDROID_NDK_RPATH}/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..")
 	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin) #MACOS
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -G Ninja ..")
-	else() #iOS
+	elseif(CMAKE_SYSTEM_NAME MATCHES iOS)  #iOS
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 -G Ninja ..")
-	
 	endif()
-	# configure for current platform
+
+	# Configure Protobuf for current platform
 	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform)
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${fileName} ${fileHeader})
 
-	if (NOT APPLE) 
+	if (ANDROID)
 	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${fileName} "cmake -G Ninja ..
 	sudo cmake --build . --parallel 10")
 	else()
@@ -158,20 +161,24 @@ if (ANDROID OR APPLE)
 	endif()
 
 	if (UNIX)
+	# Build Protobuf for desired platform
 	execute_process (COMMAND bash "-c" "bash ${fileName}"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}
 	RESULT_VARIABLE errorval )
 
+	# Build Protobuf for cırrent platform
 	execute_process (COMMAND bash "-c" "bash ${fileName}"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform
 	RESULT_VARIABLE errorval )
 	endif ()
 
 	if (WIN32)
+	# Build Protobuf for desired platform
 	execute_process (COMMAND cmd "-c" "${fileName}"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}
 	RESULT_VARIABLE errorval )
 
+	# Build Protobuf for cırrent platform
 	execute_process (COMMAND cmd "-c" "${fileName}"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform
 	RESULT_VARIABLE errorval )
@@ -192,18 +199,18 @@ if (ANDROID OR APPLE)
 	FetchContent_MakeAvailable(OpenSSL)
 	endif ()
 
+	# Configure OpenSSL for desired platform
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} ${fileHeader})
 
-	if (NOT APPLE)
+	if (ANDROID)
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export ANDROID_NDK_HOME=../../${ANDROID_NDK_RPATH}
 PATH=$ANDROID_NDK_HOME/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin:$PATH
 PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 ./Configure no-tests android-arm64 -D__ANDROID_API__=21
 make")
 	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin)
-		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export CROSS_TOP=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer
-export CROSS_SDK=MacOSX.sdk
-./Configure darwin64-x86_64-cc shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp
+		set(CMAKE_OSX_SYSROOT "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk")
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "./Configure darwin64-x86_64-cc shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp
 make")
 	elseif (CMAKE_SYSTEM_NAME MATCHES iOS) 
 		set( OPENSSL_TARGET_ARCHITECTURES_iphoneos arm64 )
@@ -215,6 +222,7 @@ PATH=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolch
 make")
 	endif()
 
+	# Build OpenSSL for desired platform
 	if (UNIX)
 	execute_process (COMMAND bash "-c" "bash ${fileName}"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/openssl-src
@@ -236,7 +244,7 @@ make")
 	include_directories(${OPENSSL_INCLUDE_DIR})
 
 	#
-	# Set -s flag to strip libGameNetworkingSockets.so, can be removed if symbols are needed.
+	# Optional: Set -s flag to strip(removes symbols) the output library (for ex: libGameNetworkingSockets.so)
 	#
 
 	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
