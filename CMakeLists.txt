@@ -130,7 +130,7 @@ if (ANDROID OR APPLE)
 
 	if (CMAKE_SYSTEM_NAME MATCHES Darwin)
 		set (depsBuildFolderName buildMacOS)
-	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin)
+	elseif (CMAKE_SYSTEM_NAME MATCHES iOS)
 		set (depsBuildFolderName buildiOS)
 	elseif (ANDROID)
 		set (depsBuildFolderName buildAndroid)
