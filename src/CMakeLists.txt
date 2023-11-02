@@ -171,7 +171,7 @@ endif()
 # Why? When using "FetchContent_Declare" with OVERRIDE_FIND_PACKAGE, protobuf-config.cmake won't be used, thus the protobuf-generate macro(protobuf_generate_cpp) would be unavailable.
 # There is already a fix at below link
 # fix link: https://github.com/protocolbuffers/protobuf/pull/10426
-# But merged fix date may be a later date than the protobuf git version we want to build for, so i find it better to stay safe with a custom protobuf_generate_cpp method.
+# But merged fix date may be a later date than the protobuf git version we want to build for, so i find it better to stay safe with a custom protobuf_generate_cpp method. It is pretty straightforward.
 #
 
 if (ANDROID OR APPLE)
