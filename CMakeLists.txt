@@ -134,7 +134,7 @@ if (ANDROID OR APPLE)
 		set (depsBuildFolderName buildiOS)
 	elseif (ANDROID)
 		set (depsBuildFolderName buildAndroid)
-
+	endif()
 
 	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName})
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} ${fileHeader})
