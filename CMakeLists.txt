@@ -123,11 +123,6 @@ if (ANDROID OR APPLE)
 	set (fileHeader "#!/bin/sh\n")
 	endif()
 
-	if (WIN32)
-	set (fileName "build.bat")
-	set (fileHeader "@echo off\n")
-	endif()
-
 	if (CMAKE_SYSTEM_NAME MATCHES Darwin)
 		set (depsBuildFolderName buildMacOS)
 	elseif (CMAKE_SYSTEM_NAME MATCHES iOS)
@@ -168,18 +163,6 @@ if (ANDROID OR APPLE)
 
 	# Build Protobuf for cırrent platform
 	execute_process (COMMAND bash "-c" "bash ${fileName}"
-	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform
-	RESULT_VARIABLE errorval )
-	endif ()
-
-	if (WIN32)
-	# Build Protobuf for desired platform
-	execute_process (COMMAND cmd "-c" "${fileName}"
-	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}
-	RESULT_VARIABLE errorval )
-
-	# Build Protobuf for cırrent platform
-	execute_process (COMMAND cmd "-c" "${fileName}"
 	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform
 	RESULT_VARIABLE errorval )
 	endif ()
