@@ -141,7 +141,7 @@ if (ANDROID OR APPLE)
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET} -G Ninja ..")
 	elseif(CMAKE_SYSTEM_NAME MATCHES iOS)  #iOS
 		set( OPENSSL_TARGET_ARCHITECTURES_iphoneos arm64 )
-		# Set the iOS platform and target architecture
+		target_compile_options( Protobuf PUBLIC -fembed-bitcode )
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET} -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -G Ninja ..
 sudo cmake --build . --parallel 10")
 	endif()
@@ -211,6 +211,8 @@ make")
 make")
 	elseif (CMAKE_SYSTEM_NAME MATCHES iOS) 
 		set( OPENSSL_TARGET_ARCHITECTURES_iphoneos arm64 )
+
+		target_compile_options( OpenSSL PUBLIC -fembed-bitcode )
 		
 		# Specify the minimum iOS version
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export CC=clang;
