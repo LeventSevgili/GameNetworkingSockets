@@ -245,7 +245,6 @@ if (ANDROID)
 		)
 elseif (CMAKE_SYSTEM_NAME MATCHES iOS) 
 
-target_compile_options( ${TGT} PUBLIC -fembed-bitcode )
 	target_link_libraries(${TGT} PUBLIC
 		${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildiOS/libprotobuf.a
 		Threads::Threads
