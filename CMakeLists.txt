@@ -1,3 +1,37 @@
+# Tested Below config at Linux machine (Debian 12) and Mac machine.(ver 13 smt)
+
+# GNS - ANDROID BUILD 
+# ------------------
+# Download android NDK from Google web site extract it to the root
+# link: https://dl.google.com/android/repository/android-ndk-r15c-linux-x86_64.zip~/android-ndk-r15c
+
+# install ncurses
+# sudo apt-get install libncurses5
+
+# fetch GameNetworkingSockets
+# git clone https://github.com/LeventSevgili/GameNetworkingSockets.git
+# cd GameNetworkingSockets
+# git checkout tags/TurboSupport
+# mkdir buildAndroid
+# cd buildAndroid
+
+# configure GameNetworkingSockets
+# sudo cmake -DCMAKE_TOOLCHAIN_FILE=../../../../Source/android-ndk-r15c/build/cmake/android.toolchain.cmake -DANDROID_NDK_RPATH=../../../../Source/android-ndk-r15c -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++11 -DCMAKE_POSITION_INDEPENDENT_CODE=ON -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DANDROID_STL=c++_static -DOpenSSLTag=OpenSSL_1_1_1e -DProtobufTag=v3.21.6 -G Ninja ..
+
+# build GameNetworkingSockets
+# sudo ninja
+
+# GNS - iOS-MACOS BUILD
+# ---------------------
+# brew install ninja llvm
+# xcode-select --install
+
+# iOS Config
+# sudo cmake -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_POSITION_INDEPENDENT_CODE=ON -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DOpenSSLTag=OpenSSL_1_1_1e -DProtobufTag=v3.21.6 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -G Ninja ..
+
+# MacOS Config
+#sudo cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DOpenSSLTag=OpenSSL_1_1_1e -DProtobufTag=v3.21.6 -G Ninja ..
+
 cmake_minimum_required(VERSION 3.9)
 
 # If vcpkg present as submodule, bring in the toolchain
