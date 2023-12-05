@@ -182,11 +182,6 @@ if (ANDROID OR APPLE)
 		set (fileHeader "#!/bin/sh\n")
 	endif()
 
-	if (WIN32)
-		set (fileName "protocFiles.bat")
-		set (fileHeader "@echo off\n")
-	endif()
-
 	# Cache protoc commands to a bash file by iterating proto files
 	file (WRITE ${PROJECT_BINARY_DIR}/${fileName} ${fileHeader})
 	file (MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/protos/common)
@@ -207,15 +202,9 @@ if (ANDROID OR APPLE)
 
 	# Run the bash file
 	if (UNIX)
-	execute_process (COMMAND bash -c "bash ${fileName}"
-	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
-	RESULT_VARIABLE errorval )
-	endif()
-
-	if (WIN32)
-	execute_process (COMMAND cmd -c "${fileName}"
-	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
-	RESULT_VARIABLE errorval )
+		execute_process (COMMAND bash -c "bash ${fileName}"
+		WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+		RESULT_VARIABLE errorval )
 	endif()
 
 	# Populate the output lists
@@ -242,14 +231,28 @@ function(gns_set_target_protobuf_properties TGT )
 if (ANDROID OR APPLE)
 	list(APPEND CMAKE_PREFIX_PATH ${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
 	include_directories(${PROJECT_BINARY_DIR}/_deps/protobuf-src/src)
+
+	list(APPEND CMAKE_PREFIX_PATH ${PROJECT_BINARY_DIR}/_deps/openssl-src/include)
+	include_directories(${PROJECT_BINARY_DIR}/_deps/openssl-src/include)
 endif ()
 
 # Android requires that log library
 if (ANDROID)
-target_link_libraries(${TGT} PUBLIC
+	target_link_libraries(${TGT} PUBLIC
 		protobuf::libprotobuf
 		Threads::Threads
 		log
+		)
+elseif (CMAKE_SYSTEM_NAME MATCHES iOS) 
+
+	target_link_libraries(${TGT} PUBLIC
+		${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildiOS/libprotobuf.a
+		Threads::Threads
+		)
+elseif (CMAKE_SYSTEM_NAME MATCHES Darwin) 
+	target_link_libraries(${TGT} PUBLIC
+		${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/libprotobuf.a
+		Threads::Threads
 		)
 else()
 	target_link_libraries(${TGT} PUBLIC

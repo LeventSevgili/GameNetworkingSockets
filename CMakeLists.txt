@@ -172,9 +172,11 @@ if (ANDROID OR APPLE)
 	if (ANDROID)
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_TOOLCHAIN_FILE=../../${ANDROID_NDK_RPATH}/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..")
 	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin) #MACOS
-		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -G Ninja ..")
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET} -G Ninja ..")
 	elseif(CMAKE_SYSTEM_NAME MATCHES iOS)  #iOS
-		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 -G Ninja ..")
+		set( OPENSSL_TARGET_ARCHITECTURES_iphoneos arm64 )
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET} -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -G Ninja ..
+sudo cmake --build . --parallel 10")
 	endif()
 
 	# Configure Protobuf for current platform
@@ -184,8 +186,11 @@ if (ANDROID OR APPLE)
 	if (ANDROID)
 	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${fileName} "cmake -G Ninja ..
 	sudo cmake --build . --parallel 10")
-	else()
-	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${fileName} "cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS=\"-fpic -O2\" -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
+	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin) #MACOS
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${fileName} "cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET} -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS=\"-fpic -O2\" -DCMAKE_POSITION_INDEPENDENT_CODE=ON -G Ninja ..
+	sudo cmake --build . --parallel 10")
+	elseif(CMAKE_SYSTEM_NAME MATCHES iOS)  #iOS
+	file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/buildCurrentPlatform/${fileName} "cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS=\"-fpic -O2\" -DCMAKE_POSITION_INDEPENDENT_CODE=ON -G Ninja ..
 	sudo cmake --build . --parallel 10")
 	endif()
 
@@ -216,7 +221,6 @@ if (ANDROID OR APPLE)
 	FetchContent_MakeAvailable(OpenSSL)
 	endif ()
 
-
 	#
 	# Set some paths for fetched libraries
 	#
@@ -224,7 +228,6 @@ if (ANDROID OR APPLE)
 	set(OPENSSL_CRYPTO_LIBRARY ${PROJECT_BINARY_DIR}/_deps/openssl-src/libcrypto.so)
 	set(OPENSSL_INCLUDE_DIR ${PROJECT_BINARY_DIR}/_deps/openssl-src/include)
 	include_directories(${OPENSSL_INCLUDE_DIR})
-
 
 	# Configure OpenSSL for desired platform
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} ${fileHeader})
@@ -237,15 +240,16 @@ PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 make")
 	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin) 
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export SDKROOT=\"$(xcrun --sdk macosx --show-sdk-path)\"
-./Configure darwin64-x86_64-cc shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp
+./Configure darwin64-x86_64-cc no-shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp
 make")
 	elseif (CMAKE_SYSTEM_NAME MATCHES iOS) 
 		set( OPENSSL_TARGET_ARCHITECTURES_iphoneos arm64 )
+		# Specify the minimum iOS version
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export CC=clang;
 export CROSS_TOP=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer
 export CROSS_SDK=iPhoneOS.sdk
 PATH=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:$PATH	
-./Configure ios64-cross no-shared no-dso no-hw no-engine
+./Configure no-tests ios64-cross no-shared no-dso no-hw no-engine
 make")
 	endif()
 
@@ -265,9 +269,10 @@ make")
 	#
 	# Optional: Set -s flag to strip(removes symbols) the output library (for ex: libGameNetworkingSockets.so)
 	#
-
-	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
-	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
+	if (ANDROID)
+		set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
+		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
+	endif ()
 
 endif (ANDROID OR APPLE)
 
