@@ -130,6 +130,21 @@ if (WIN32)
 	endif()
 endif()
 
+
+if (ANDROID)
+	if(ANDROID_ABI STREQUAL "arm64-v8a")
+		set (64Bit "YES")
+	else()
+		set (64Bit "NO")
+	endif()
+
+	if (64Bit STREQUAL "YES")
+	message("Building for 64 bit")
+	else()
+	message("Building for 32 bit")
+	endif()
+endif()
+
 if (ANDROID OR APPLE)
 	#
 	# Fetch Protobuf, configure it and build it for the desired platform. Supported platforms: iOS, Android and MacOS
@@ -170,7 +185,13 @@ if (ANDROID OR APPLE)
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} ${fileHeader})
 
 	if (ANDROID)
+
+	if (64Bit STREQUAL "YES")
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_TOOLCHAIN_FILE=../../${ANDROID_NDK_RPATH}/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..")
+	else()
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_TOOLCHAIN_FILE=../../${ANDROID_NDK_RPATH}/build/cmake/android.toolchain.cmake -DANDROID_ABI=armeabi-v7a -DANDROID_PLATFORM=android-21 -DCMAKE_CXX_FLAGS=-std=c++14 -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DANDROID_STL=c++_static -G Ninja ..")
+	endif()
+
 	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin) #MACOS
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/protobuf-src/${depsBuildFolderName}/${fileName} "cmake -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET} -G Ninja ..")
 	elseif(CMAKE_SYSTEM_NAME MATCHES iOS)  #iOS
@@ -233,11 +254,19 @@ sudo cmake --build . --parallel 10")
 	file (WRITE ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} ${fileHeader})
 
 	if (ANDROID)
+		if (64Bit STREQUAL "YES")
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export ANDROID_NDK_HOME=../../${ANDROID_NDK_RPATH}
 PATH=$ANDROID_NDK_HOME/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin:$PATH
 PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 ./Configure no-tests android-arm64 -D__ANDROID_API__=21
 make")
+		else()
+		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export ANDROID_NDK_HOME=../../${ANDROID_NDK_RPATH}
+PATH=$ANDROID_NDK_HOME/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin:$PATH
+PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+./Configure no-tests android-arm -D__ANDROID_API__=21
+make")
+		endif()
 	elseif (CMAKE_SYSTEM_NAME MATCHES Darwin) 
 		file (APPEND ${PROJECT_BINARY_DIR}/_deps/openssl-src/${fileName} "export SDKROOT=\"$(xcrun --sdk macosx --show-sdk-path)\"
 ./Configure darwin64-x86_64-cc no-shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp
