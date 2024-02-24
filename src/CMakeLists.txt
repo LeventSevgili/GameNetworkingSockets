@@ -114,14 +114,6 @@ if(USE_STEAMWEBRTC)
 	add_subdirectory(external/steamwebrtc)
 endif(USE_STEAMWEBRTC)
 
-set(C99_FEATURES
-	c_restrict
-	c_function_prototypes)
-
-set(CXX11_FEATURES
-	cxx_constexpr
-	cxx_auto_type)
-
 set(GNS_COMMON_FLAGS
 	-fvisibility=hidden
 	-fno-strict-aliasing

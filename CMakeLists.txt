@@ -139,9 +139,9 @@ if (ANDROID)
 	endif()
 
 	if (64Bit STREQUAL "YES")
-	message("Building for 64 bit")
+	message("Building for ARM64")
 	else()
-	message("Building for 32 bit")
+	message("Building for ARM")
 	endif()
 endif()
 
