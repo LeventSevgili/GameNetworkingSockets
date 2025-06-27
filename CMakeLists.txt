@@ -1,5 +1,21 @@
 # Tested Below config at Linux machine (Debian 12) and Mac machine.(ver 13 smt)
 
+# GNS - WIN BUILD with vcpkg
+# --------------------------
+# -- Ensure to run the x64 Native Tools Command
+# git clone --recursive https://github.com/LeventSevgili/GameNetworkingSockets.git
+# cd GameNetworkingSockets
+# git checkout 807fb30fda136d3d1ab9269c685a2d2789e4c2d5
+# git clone https://github.com/Microsoft/vcpkg.git
+# cd vcpkg
+# .\bootstrap-vcpkg.bat
+# vcpkg install --triplet=x64-windows
+# cd ..
+# mkdir buildWin
+# cd buildWin
+# cmake -DCMAKE_BUILD_TYPE=Release -G Ninja ..
+# ninja
+
 # GNS - ANDROID BUILD 
 # ------------------
 # Download android NDK from Google web site extract it to the root
